@@ -34,10 +34,19 @@ var allSources = map[string]sourceFn{
 	"yandex-meta":     yandexSource(true),
 	"ddg-images":      ddgSource(false),
 	"ddg-meta":        ddgSource(true),
-	"maison-ennour":   islamicBookSiteSource("maison-ennour", "https://www.maisondennour.com/?s={ISBN}&post_type=product"),
-	"tawhid":          islamicBookSiteSource("tawhid", "https://www.edition-tawhid.com/?s={ISBN}&post_type=product"),
-	"sana":            islamicBookSiteSource("sana", "https://www.librairie-sana.com/fr/recherche?controller=search&s={ISBN}"),
-	"albouraq":        albouraqSource,
+	"maison-ennour":      islamicBookSiteSource("maison-ennour", "https://www.maisondennour.com/?s={ISBN}&post_type=product"),
+	"tawhid":             islamicBookSiteSource("tawhid", "https://www.edition-tawhid.com/?s={ISBN}&post_type=product"),
+	"sana":               islamicBookSiteSource("sana", "https://www.librairie-sana.com/fr/recherche?controller=search&s={ISBN}"),
+	"albayyinah":         islamicBookSiteSource("albayyinah", "https://albayyinah.fr/recherche?controller=search&s={ISBN}"),
+	"sifatusafwa":        islamicBookSiteSource("sifatusafwa", "https://sifatusafwa.com/fr/recherche?controller=search&s={ISBN}"),
+	"librairie-musulmane": islamicBookSiteSource("librairie-musulmane", "https://www.la-librairie-musulmane.com/?s={ISBN}&post_type=product"),
+	"al-imen":            islamicBookSiteSource("al-imen", "https://fr.al-imen.com/search?q={ISBN}&type=product"),
+	"maktaba-alqalam":    islamicBookSiteSource("maktaba-alqalam", "https://maktaba-alqalam.com/?s={ISBN}&post_type=product"),
+	"alhidayah":          islamicBookSiteSource("alhidayah", "https://alhidayah.fr/recherche?controller=search&s={ISBN}"),
+	"alfil-maktaba":      islamicBookSiteSource("alfil-maktaba", "https://alfil-maktaba.fr/search?q={ISBN}&type=product"),
+	"librairie-al-imam":  islamicBookSiteSource("librairie-al-imam", "https://librairiealimam.fr/recherche?controller=search&s={ISBN}"),
+	"maktaba-abou-imran": islamicBookSiteSource("maktaba-abou-imran", "https://maktaba-abou-imran.com/?s={ISBN}&post_type=product"),
+	"albouraq":           albouraqSource,
 }
 
 type source struct {
@@ -90,14 +99,33 @@ func tryCover(ctx context.Context, isbn string) ([]byte, string, string) {
 		{"maison-ennour", allSources["maison-ennour"]},
 		{"tawhid", allSources["tawhid"]},
 		{"sana", allSources["sana"]},
+		{"albayyinah", allSources["albayyinah"]},
+		{"sifatusafwa", allSources["sifatusafwa"]},
+		{"librairie-musulmane", allSources["librairie-musulmane"]},
+		{"al-imen", allSources["al-imen"]},
+		{"maktaba-alqalam", allSources["maktaba-alqalam"]},
+		{"alhidayah", allSources["alhidayah"]},
+		{"alfil-maktaba", allSources["alfil-maktaba"]},
+		{"librairie-al-imam", allSources["librairie-al-imam"]},
+		{"maktaba-abou-imran", allSources["maktaba-abou-imran"]},
 		{"albouraq", allSources["albouraq"]},
 	}
-	if img, mime, src := raceSources(ctx, islamicFR, isbn, meta, 9*time.Second); img != nil {
+	if img, mime, src := raceSources(ctx, islamicFR, isbn, meta, 12*time.Second); img != nil {
 		return img, mime, src
 	}
 
-	if meta != nil && meta.Title != "" {
-		log.Printf("[%s] meta=%q authors=%v → meta-aware scrape", isbn, meta.Title, meta.Authors)
+	hasMeta := meta != nil && meta.Title != ""
+	// 979-prefix ISBNs are Amazon KDP exclusives: no ISBN-10, no Google Books,
+	// no OpenLibrary entry. Meta will always be nil for them, but a raw bing/
+	// yandex/ddg search by the ISBN-13 reliably returns the Amazon cover, so
+	// we let phases 3 and 4 run without meta in that case.
+	is979 := strings.HasPrefix(isbn, "979")
+	if hasMeta || is979 {
+		if hasMeta {
+			log.Printf("[%s] meta=%q authors=%v → meta-aware scrape", isbn, meta.Title, meta.Authors)
+		} else {
+			log.Printf("[%s] no meta but 979-prefix → raw-ISBN scrape", isbn)
+		}
 		metaScrape := []source{
 			{"bing-meta", bingSource(true)},
 			{"yandex-meta", yandexSource(true)},
@@ -121,9 +149,10 @@ func tryCover(ctx context.Context, isbn string) ([]byte, string, string) {
 	// so it stays safe to query even without metadata. Bing/Yandex/DDG image
 	// search only become trustworthy once we can score results against the real
 	// title/authors — without that signal they regularly return covers from
-	// completely unrelated books, so skip them when meta is unavailable.
+	// completely unrelated books, so skip them when meta is unavailable
+	// (except for 979 ISBNs, where the Amazon cover is canonical).
 	rawScrape := []source{{"goodreads", goodreadsSource}}
-	if meta != nil && meta.Title != "" {
+	if hasMeta || is979 {
 		rawScrape = append(rawScrape,
 			source{"bing-images", bingSource(false)},
 			source{"yandex-images", yandexSource(false)},
@@ -417,8 +446,10 @@ func goodreadsMetaSource(ctx context.Context, isbn string, meta *bookMeta) ([]by
 var anyImgRe = regexp.MustCompile(`<img[^>]+src=["']([^"']+\.(?:jpe?g|png|webp|JPG|PNG|WEBP))[^"']*["']`)
 var prestaProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](https?://[^"']+)["'][^>]+class=["'][^"']*(?:thumbnail|product-link|product_img_link)`)
 var wooProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](https?://[^"']+/(?:produit|product)/[^"']+)["']`)
+var shopifyProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](https?://[^"']+/products/[^"']+)["']`)
+var shopifyRelProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](/products/[^"']+)["']`)
 
-const maxProductCandidates = 5
+const maxProductCandidates = 8
 
 // islamicBookSiteSource tries 2 strategies: ISBN search (rare; Albouraq's API
 // indexes ISBN, but most WooCommerce/Prestashop sites do not), then a
@@ -429,7 +460,17 @@ func islamicBookSiteSource(name, urlTpl string) sourceFn {
 	return func(ctx context.Context, isbn string, meta *bookMeta) ([]byte, string, error) {
 		i10, i13 := bothISBNForms(isbn)
 
+		// Try the input form first, then the alternate form. Most bookstores
+		// index a book under one canonical ISBN — if you searched the wrong
+		// form, the lookup misses even when the book is in stock. The early
+		// exit in the loop below means we only pay this cost on real misses.
 		queries := []string{isbn}
+		for _, alt := range []string{i13, i10} {
+			if alt != "" && alt != isbn {
+				queries = append(queries, alt)
+				break
+			}
+		}
 		if meta != nil && meta.Title != "" {
 			q := meta.Title
 			if len(meta.Authors) > 0 {
@@ -438,31 +479,60 @@ func islamicBookSiteSource(name, urlTpl string) sourceFn {
 			queries = append(queries, sanitizeQuery(q))
 		}
 
+		baseHost := baseHostOf(urlTpl)
+
+		// Some Prestashop themes (e.g. albayyinah) ship search HTML that
+		// CycleTLS-driven cloudflareGet doesn't always hydrate. Fall back to
+		// the plain httpGet client when the bypassed call yields no candidates.
+		fetch := func(u string, h map[string]string) (string, int, error) {
+			b, c, _, err := cloudflareGet(ctx, u, h)
+			cf := len(extractProductLinksFor(string(b), baseHost))
+			if err == nil && c < 400 && len(b) > 0 && cf > 0 {
+				return string(b), c, nil
+			}
+			b2, c2, _, err2 := httpGet(ctx, u, h)
+			pl := len(extractProductLinksFor(string(b2), baseHost))
+			thumbHits := strings.Count(string(b2), "product-thumbnail")
+			log.Printf("[%s] fetch %s cf=(%d/%d/%v cands=%d) http=(%d/%d/%v cands=%d thumb=%d)",
+				name, u, c, len(b), err, cf, c2, len(b2), err2, pl, thumbHits)
+			if err2 == nil && c2 < 400 && pl > 0 {
+				return string(b2), c2, nil
+			}
+			if err == nil {
+				return string(b), c, nil
+			}
+			if err2 == nil {
+				return string(b2), c2, nil
+			}
+			return "", c2, err2
+		}
+
 		for _, q := range queries {
 			searchURL := strings.ReplaceAll(urlTpl, "{ISBN}", url.QueryEscape(q))
-			html, code, _, err := cloudflareGet(ctx, searchURL, map[string]string{
+			body, code, err := fetch(searchURL, map[string]string{
 				"Accept": "text/html,application/xhtml+xml",
 			})
 			if err != nil || code >= 400 {
 				continue
 			}
-			body := string(html)
 			if hasNoResultsMarker(body) {
 				continue
 			}
-			candidates := extractProductLinks(body)
+			candidates := extractProductLinksFor(body, baseHost)
+			candidates = sortCandidatesByISBN(candidates, isbn, i10, i13)
+			log.Printf("[%s] search q=%q size=%d candidates=%d hasIsbn=%v",
+				name, q, len(body), len(candidates), strings.Contains(body, isbn))
 			for i, productURL := range candidates {
 				if i >= maxProductCandidates {
 					break
 				}
-				page, c, _, err := cloudflareGet(ctx, productURL, map[string]string{
+				pageStr, c, err := fetch(productURL, map[string]string{
 					"Referer": searchURL,
 					"Accept":  "text/html",
 				})
 				if err != nil || c >= 400 {
 					continue
 				}
-				pageStr := string(page)
 				if !pageContainsISBN(pageStr, isbn, i10, i13) {
 					continue
 				}
@@ -496,6 +566,13 @@ func sanitizeQuery(s string) string {
 }
 
 func extractProductLinks(body string) []string {
+	return extractProductLinksFor(body, "")
+}
+
+// extractProductLinksFor collects all candidate product URLs from a search
+// results page (Prestashop, WooCommerce, Shopify). When baseHost is non-empty,
+// same-host relative Shopify links (/products/...) are promoted to absolute.
+func extractProductLinksFor(body, baseHost string) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(u string) {
@@ -511,7 +588,59 @@ func extractProductLinks(body string) []string {
 	for _, m := range wooProductLinkRe.FindAllStringSubmatch(body, -1) {
 		add(m[1])
 	}
+	for _, m := range shopifyProductLinkRe.FindAllStringSubmatch(body, -1) {
+		add(m[1])
+	}
+	if baseHost != "" {
+		for _, m := range shopifyRelProductLinkRe.FindAllStringSubmatch(body, -1) {
+			add(baseHost + m[1])
+		}
+	}
 	return out
+}
+
+// sortCandidatesByISBN puts URLs whose path contains the ISBN (in any form)
+// at the front, preserving relative order. Most bookstore CMSes embed the
+// ISBN in the product slug, so matching URLs are almost always the right book.
+func sortCandidatesByISBN(cands []string, isbn, i10, i13 string) []string {
+	if len(cands) <= 1 {
+		return cands
+	}
+	needles := []string{}
+	for _, k := range []string{isbn, i10, i13} {
+		if k != "" {
+			needles = append(needles, k)
+		}
+	}
+	if len(needles) == 0 {
+		return cands
+	}
+	var pri, rest []string
+	for _, c := range cands {
+		match := false
+		for _, n := range needles {
+			if strings.Contains(c, n) {
+				match = true
+				break
+			}
+		}
+		if match {
+			pri = append(pri, c)
+		} else {
+			rest = append(rest, c)
+		}
+	}
+	return append(pri, rest...)
+}
+
+// baseHostOf returns "scheme://host" for a URL, or "" if parsing fails. Used
+// to absolutize Shopify relative product links on the originating host.
+func baseHostOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 func pageContainsISBN(html, isbn, i10, i13 string) bool {
