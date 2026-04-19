@@ -1,0 +1,2695 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISBN Cover Wizard</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Cpath fill='%23fff' d='M18 14h22a6 6 0 0 1 6 6v28a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V14zm4 4v28h20V18H22zm4 6h12v3H26v-3zm0 7h12v3H26v-3zm0 7h8v3h-8v-3z'/%3E%3C/svg%3E"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --bg-page:   #f5f4f1;
+            --bg-card:   #ffffff;
+            --bg-inset:  #f8f7f5;
+            --border:    #e5e3de;
+            --border-strong: #d0cec9;
+            --text-primary:  #1c1917;
+            --text-secondary:#57534e;
+            --text-muted:    #a8a29e;
+            --accent:        #6366f1;
+            --accent-soft:   rgba(99,102,241,0.08);
+            --accent-border: rgba(99,102,241,0.25);
+            --green:     #059669;
+            --green-soft:rgba(5,150,105,0.08);
+            --red:       #dc2626;
+            --red-soft:  rgba(220,38,38,0.08);
+            --amber:     #d97706;
+            --amber-soft:rgba(217,119,6,0.08);
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.09), 0 4px 8px rgba(0,0,0,0.05);
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: var(--bg-page);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            padding: 2.5rem 0 4rem;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            width: 100%;
+            padding-inline: clamp(1rem, 4vw, 3rem);
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            padding: 2.5rem;
+        }
+
+        .logo-ring {
+            width: 56px;
+            height: 56px;
+            background: var(--primary-gradient);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.25rem;
+            box-shadow: 0 6px 20px rgba(99,102,241,0.3);
+        }
+        .logo-ring svg { color: white; width: 28px; height: 28px; }
+
+        .title-section h1 {
+            font-family: 'DM Serif Display', serif;
+            font-weight: 400;
+            font-size: 2rem;
+            margin-bottom: 0.4rem;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+        }
+        .title-section p { color: var(--text-secondary); font-weight: 400; font-size: 0.95rem; }
+
+        /* ── Forms ── */
+        .form-label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        .form-control-custom, .form-control-custom:focus {
+            background: var(--bg-inset) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius-md) !important;
+            color: var(--text-primary) !important;
+            padding: 0.875rem 1.125rem !important;
+            font-size: 0.95rem !important;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .form-control-custom:focus {
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.12) !important;
+            background: #fff !important;
+        }
+        textarea.form-control-custom {
+            min-height: 220px;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        /* ── Buttons ── */
+        .btn-primary-grad {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 0.875rem 1.5rem;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            color: white;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(99,102,241,0.25);
+            white-space: nowrap;
+        }
+        .btn-primary-grad:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(99,102,241,0.35);
+            filter: brightness(1.06);
+            color: white;
+        }
+        .btn-primary-grad:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        .btn-ghost-line {
+            background: transparent;
+            border: 1px solid var(--border-strong);
+            color: var(--text-secondary);
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1.125rem;
+            font-weight: 500;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .btn-ghost-line:hover {
+            background: var(--bg-inset);
+            border-color: var(--border-strong);
+            color: var(--text-primary);
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--bg-inset);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            border-radius: var(--radius-sm);
+            padding: 0.5rem 0.875rem;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+        .btn-action:hover {
+            background: var(--accent-soft);
+            border-color: var(--accent-border);
+            color: var(--accent);
+        }
+
+        /* ── Tabs ── */
+        .tabs-nav {
+            display: flex;
+            gap: 0.25rem;
+            margin: 1.5rem 0 0;
+            padding: 4px;
+            background: var(--bg-inset);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 0.55rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.875rem;
+            font-family: 'DM Sans', sans-serif;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.18s;
+            white-space: nowrap;
+        }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+        }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; animation: fadeIn 0.25s ease; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── Progress / batch ── */
+        .progress-wrap {
+            background: var(--bg-inset);
+            border-radius: var(--radius-md);
+            padding: 1.75rem;
+            border: 1px solid var(--border);
+        }
+        .progress-bar-track {
+            height: 8px;
+            background: var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 1.25rem 0 0.75rem;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--primary-gradient);
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-stats {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .live-counts {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-top: 1.25rem;
+        }
+        .count-pill {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0.75rem;
+            text-align: center;
+        }
+        .count-pill .num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
+        .count-pill .lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.15rem; }
+        .count-pill.ok .num  { color: var(--green); }
+        .count-pill.ko .num  { color: var(--red); }
+        .count-pill.pending .num { color: var(--accent); }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.5rem;
+            margin: 1rem 0;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 0.5rem;
+            background: var(--bg-inset);
+            border-radius: var(--radius-sm);
+        }
+        .preview-thumb {
+            aspect-ratio: 2/3;
+            background: var(--border);
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+        .preview-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .preview-thumb .label {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+            font-size: 0.6rem;
+            padding: 2px 4px;
+            text-align: center;
+            font-family: monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ── Toast ── */
+        .toast-msg {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-sm);
+            display: none;
+            z-index: 100;
+            font-weight: 600;
+            color: white;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .toast-msg.error   { background: var(--red);   box-shadow: 0 8px 16px rgba(220,38,38,0.3); }
+        .toast-msg.success { background: var(--green);  box-shadow: 0 8px 16px rgba(5,150,105,0.3); }
+
+        /* ── Helpers ── */
+        .helper-text { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.4rem; }
+        .spinner-orbit {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(99,102,241,0.15);
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .current-isbn {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent);
+            font-size: 0.9rem;
+            margin-top: 0.4rem;
+            min-height: 1.4em;
+        }
+
+        .info-callout {
+            background: var(--accent-soft);
+            border-left: 3px solid var(--accent);
+            border-radius: var(--radius-sm);
+            padding: 0.75rem 1rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin: 1rem 0;
+            line-height: 1.55;
+        }
+        .info-callout strong { color: var(--text-primary); }
+        .info-callout.green {
+            background: var(--green-soft);
+            border-left-color: var(--green);
+        }
+        .info-callout.amber {
+            background: var(--amber-soft);
+            border-left-color: var(--amber);
+        }
+        .info-callout.red {
+            background: var(--red-soft);
+            border-left-color: var(--red);
+        }
+
+        /* ── Code blocks ── */
+        .code-block {
+            background: #1e1b18;
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.78rem;
+            color: #e7e3dd;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre;
+            margin: 0.75rem 0 1.25rem;
+            position: relative;
+        }
+        .code-block .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #a8a29e;
+            padding: 0.3rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .code-block .copy-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+        .code-kw  { color: #c084fc; }
+        .code-str { color: #86efac; }
+        .code-cmt { color: #57534e; font-style: italic; }
+        .code-num { color: #fbbf24; }
+        .code-cls { color: #67e8f9; }
+
+        /* ── Flex helpers ── */
+        .d-flex { display: flex; }
+        .gap-2  { gap: 0.5rem; }
+        .mt-3   { margin-top: 1rem; }
+        .text-center { text-align: center; }
+        .flex-grow-1 { flex: 1; }
+
+        /* ─────────────────────────────────────────
+           TAB 1 — ISBN unique
+        ───────────────────────────────────────── */
+        .single-cover-result {
+            display: none;
+            margin-top: 1.5rem;
+            animation: fadeIn 0.35s ease;
+        }
+        .single-cover-result.visible { display: block; }
+
+        /* Cover duo: proxy cover + Google Books cover */
+        .cover-duo {
+            display: flex;
+            gap: 1.25rem;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .cover-slot {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 0 0 auto;
+        }
+        .cover-slot img {
+            width: 160px;
+            border-radius: 10px;
+            box-shadow: var(--shadow-lg), 0 0 0 1px var(--border);
+            object-fit: cover;
+            display: block;
+            background: var(--bg-inset);
+        }
+        .cover-slot .cover-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+        }
+        /* Skeleton for cover placeholder */
+        .cover-skeleton {
+            width: 160px;
+            height: 230px;
+            border-radius: 10px;
+            background: linear-gradient(90deg, var(--bg-inset) 25%, var(--border) 50%, var(--bg-inset) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+        }
+        @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Google Books result card */
+        .gb-card {
+            background: var(--bg-inset);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin-top: 0;
+        }
+        .gb-card-header { margin-bottom: 1rem; }
+        .gb-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.25rem;
+            font-weight: 400;
+            color: var(--text-primary);
+            line-height: 1.3;
+            margin: 0 0 0.2rem;
+        }
+        .gb-subtitle {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin: 0 0 0.5rem;
+        }
+        .gb-authors {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--accent);
+            margin: 0;
+        }
+
+        /* Two-column metadata grid */
+        .gb-meta-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.35rem 1.25rem;
+            font-size: 0.83rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+        .gb-meta-key {
+            color: var(--text-muted);
+            font-weight: 500;
+            white-space: nowrap;
+            padding: 0.15rem 0;
+        }
+        .gb-meta-val {
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            padding: 0.15rem 0;
+            word-break: break-word;
+        }
+        .gb-meta-val.prose {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.83rem;
+            word-break: normal;
+        }
+
+        /* Rating stars */
+        .gb-rating {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .gb-stars { color: #f59e0b; letter-spacing: 0.05em; }
+
+        /* Description section */
+        .gb-description-wrap {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+        .gb-description-wrap h5 {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin: 0 0 0.6rem;
+        }
+        .gb-description-text {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            line-height: 1.7;
+            margin: 0;
+        }
+        .gb-description-text.clamped {
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .btn-read-more {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0.3rem 0;
+            font-family: 'DM Sans', sans-serif;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        /* Action buttons row at footer of GB card */
+        .gb-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Proxy cover meta strip */
+        .meta-strip {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 0.875rem 1.125rem;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.35rem 1.5rem;
+            font-size: 0.83rem;
+            margin-top: 0;
+        }
+        .meta-row { display: contents; }
+        .meta-key { color: var(--text-muted); font-weight: 500; white-space: nowrap; padding: 0.1rem 0; }
+        .meta-val { color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; word-break: break-all; padding: 0.1rem 0; }
+
+        .cover-actions {
+            display: flex;
+            gap: 0.6rem;
+            margin-top: 0.875rem;
+            flex-wrap: wrap;
+        }
+
+        .single-not-found {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: var(--red);
+            background: var(--red-soft);
+            border: 1px solid rgba(220,38,38,0.2);
+            border-radius: var(--radius-md);
+            margin-top: 1.5rem;
+            animation: fadeIn 0.35s ease;
+        }
+        .single-not-found.visible { display: block; }
+        .single-loading {
+            display: none;
+            text-align: center;
+            padding: 2.5rem 1rem;
+            animation: fadeIn 0.2s ease;
+        }
+        .single-loading.visible { display: block; }
+        .single-loading p { color: var(--text-secondary); margin: 0; font-size: 0.9rem; }
+
+        /* Skeleton card for GB metadata */
+        .gb-skeleton {
+            display: none;
+            background: var(--bg-inset);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin-top: 1.25rem;
+        }
+        .gb-skeleton.visible { display: block; animation: fadeIn 0.2s ease; }
+        .skel-line {
+            height: 12px;
+            border-radius: 6px;
+            background: linear-gradient(90deg, var(--border) 25%, var(--border-strong) 50%, var(--border) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+            margin-bottom: 0.75rem;
+        }
+        .skel-line.wide { width: 80%; }
+        .skel-line.med  { width: 55%; }
+        .skel-line.narrow { width: 35%; }
+
+        /* No GB data notice */
+        .gb-no-result {
+            display: none;
+            padding: 1rem;
+            background: var(--bg-inset);
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius-md);
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            text-align: center;
+            margin-top: 1.25rem;
+        }
+        .gb-no-result.visible { display: block; }
+
+        /* Covers + side-panel layout when GB data present */
+        .result-layout {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .result-covers-col { flex: 0 0 auto; }
+        .result-meta-col   { flex: 1 1 280px; min-width: 0; }
+
+        /* ─────────────────────────────────────────
+           TAB 2 — Lot (Batch)
+        ───────────────────────────────────────── */
+        .batch-progress-wrap {
+            background: var(--bg-inset);
+            border-radius: var(--radius-md);
+            padding: 1.75rem;
+            border: 1px solid var(--border);
+            display: none;
+        }
+        .batch-progress-wrap.visible { display: block; animation: fadeIn 0.3s ease; }
+        .batch-ready { display: none; }
+        .batch-ready.visible { display: block; animation: fadeIn 0.3s ease; }
+        .batch-done-wrap { display: none; }
+        .batch-done-wrap.visible { display: block; animation: fadeIn 0.3s ease; }
+
+        .eta-row {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-top: 0.4rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .time-badges { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+        .time-badge {
+            background: var(--accent-soft);
+            border: 1px solid var(--accent-border);
+            color: var(--accent);
+            padding: 0.3rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ─────────────────────────────────────────
+           TAB 3 — Architecture
+        ───────────────────────────────────────── */
+        .arch-section { margin: 1.75rem 0; }
+        .arch-section h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .arch-section h3 .section-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            background: var(--primary-gradient);
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: white;
+            flex-shrink: 0;
+        }
+        .arch-section p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.65; }
+        .arch-divider { height: 1px; background: var(--border); margin: 1.25rem 0; }
+
+        .chart-wrap {
+            background: var(--bg-inset);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1rem 0;
+            position: relative;
+        }
+        .chart-caption {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-top: 0.4rem;
+            font-style: italic;
+        }
+        .callout-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+            margin: 1rem 0;
+        }
+        .callout-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+        }
+        .callout-card .callout-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+        .callout-card .callout-body {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .pitfall-list { list-style: none; padding: 0; margin: 0.75rem 0; }
+        .pitfall-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .pitfall-list li:last-child { border-bottom: none; }
+        .pitfall-list .check {
+            flex-shrink: 0;
+            width: 18px;
+            height: 18px;
+            background: var(--green-soft);
+            border: 1px solid rgba(5,150,105,0.3);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: var(--green);
+            margin-top: 0.1rem;
+        }
+        .tag-pill {
+            display: inline-block;
+            background: var(--accent-soft);
+            border: 1px solid var(--accent-border);
+            color: var(--accent);
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .source-tag {
+            background: var(--accent-soft);
+            border: 1px solid var(--accent-border);
+            color: var(--accent);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+
+        /* ─────────────────────────────────────────
+           Batch list — lot rows
+        ───────────────────────────────────────── */
+        .batch-row {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 0.75rem;
+            transition: box-shadow 0.15s;
+        }
+        .batch-row:hover { box-shadow: var(--shadow-md); }
+        .batch-row-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .batch-row-meta { flex: 1; min-width: 0; }
+        .batch-row-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+        .batch-status-badge {
+            display: inline-block;
+            padding: 0.2rem 0.65rem;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .batch-status-badge.done    { background: var(--green-soft); color: var(--green); border: 1px solid rgba(5,150,105,0.25); }
+        .batch-status-badge.running { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); }
+        .batch-status-badge.error   { background: var(--red-soft); color: var(--red); border: 1px solid rgba(220,38,38,0.25); }
+
+        .batch-row-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .batch-row-id:hover { color: var(--accent); }
+
+        .batch-counts {
+            display: inline-flex;
+            gap: 0.5rem;
+            margin-top: 0.3rem;
+        }
+        .count-badge-found   { background: var(--green-soft); color: var(--green); border: 1px solid rgba(5,150,105,0.2); padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+        .count-badge-missing { background: var(--red-soft);   color: var(--red);   border: 1px solid rgba(220,38,38,0.2);  padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+
+        .batch-isbn-preview {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .batch-size-info { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+        .batch-eta-info  { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+        .batch-split-inline { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); display: none; }
+        .batch-split-inline.open { display: block; }
+        .batch-split-parts { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+
+        /* Drop zone drag-over state */
+        .dropzone-over {
+            border-color: var(--accent) !important;
+            background: var(--accent-soft) !important;
+        }
+
+        /* Confirm modal */
+        .confirm-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 8888;
+            background: rgba(28,25,23,0.45);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .confirm-modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            animation: fadeIn 0.2s ease;
+        }
+        .confirm-modal h3 {
+            font-family: 'DM Serif Display', serif;
+            font-weight: 400;
+            font-size: 1.2rem;
+            margin: 0 0 0.6rem;
+            color: var(--text-primary);
+        }
+        .confirm-modal p { color: var(--text-secondary); font-size: 0.875rem; margin: 0 0 1.5rem; line-height: 1.55; }
+        .confirm-modal-btns { display: flex; gap: 0.75rem; }
+        .btn-danger {
+            background: var(--red);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1.25rem;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.875rem;
+            color: white;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 0 4px 12px rgba(220,38,38,0.2);
+        }
+        .btn-danger:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+        /* ─────────────────────────────────────────
+           TAB 4 — Exemple Java
+        ───────────────────────────────────────── */
+        #tab-java h3 {
+            font-family: 'DM Serif Display', serif;
+            font-weight: 400;
+            font-size: 1.4rem;
+            margin: 0 0 0.5rem;
+            color: var(--text-primary);
+        }
+        #tab-java h4 {
+            color: var(--text-primary);
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-top: 1.25rem;
+        }
+
+        /* ─────────────────────────────────────────
+           Batch resume banner
+        ───────────────────────────────────────── */
+        .resume-banner {
+            background: var(--green-soft);
+            border: 1px solid rgba(5,150,105,0.25);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .resume-banner strong { color: var(--green); }
+
+        /* ─────────────────────────────────────────
+           Responsive
+        ───────────────────────────────────────── */
+        @media (max-width: 640px) {
+            body { padding: 1rem 0 3rem; }
+            .glass-card { padding: 1.5rem; border-radius: var(--radius-md); }
+            .meta-strip, .gb-meta-grid { grid-template-columns: 1fr; }
+            .callout-grid { grid-template-columns: 1fr; }
+            .cover-duo { flex-direction: column; align-items: center; }
+            .result-layout { flex-direction: column; }
+            .cover-slot img, .cover-skeleton { width: 140px; }
+            .tab-btn { font-size: 0.78rem; padding: 0.5rem 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth gate -->
+    <div id="authGate" style="position:fixed;inset:0;z-index:9999;background:rgba(245,244,241,0.97);display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);">
+        <div style="background:#fff;border:1px solid var(--border);border-radius:18px;padding:2rem;max-width:380px;width:90%;box-shadow:var(--shadow-lg);">
+            <div style="width:48px;height:48px;background:var(--primary-gradient);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h2 style="margin:0 0 8px;font-family:'DM Serif Display',serif;font-weight:400;font-size:1.4rem;text-align:center;color:var(--text-primary);">Code d'accès requis</h2>
+            <p style="margin:0 0 1.25rem;color:var(--text-secondary);font-size:0.875rem;text-align:center;line-height:1.55;">Cet outil est privé. Entre le code d'accès pour utiliser le proxy de couverture.</p>
+            <input id="authInput" type="password" autocomplete="off" placeholder="Code d'accès" style="width:100%;box-sizing:border-box;padding:0.75rem 1rem;border:1px solid var(--border);border-radius:10px;font-size:0.95rem;margin-bottom:0.6rem;font-family:'DM Sans',sans-serif;color:var(--text-primary);background:var(--bg-inset);outline:none;transition:border-color 0.15s;" />
+            <p id="authError" style="display:none;margin:0 0 0.6rem;color:var(--red);font-size:0.8rem;">Code incorrect.</p>
+            <button id="authSubmit" class="btn-primary-grad" style="width:100%;">Activer le proxy</button>
+        </div>
+    </div>
+
+    <main class="main-container">
+        <div class="glass-card">
+            <div class="logo-ring">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+            </div>
+
+            <div class="title-section text-center">
+                <h1>ISBN Cover Wizard</h1>
+                <p>Multi-source &nbsp;·&nbsp; Traitement serveur &nbsp;·&nbsp; Export ZIP</p>
+            </div>
+
+            <!-- Onglets -->
+            <div class="tabs-nav">
+                <button class="tab-btn active" data-tab="single">ISBN unique</button>
+                <button class="tab-btn" data-tab="batch">Lot</button>
+                <button class="tab-btn" data-tab="arch">Architecture</button>
+                <button class="tab-btn" data-tab="java">Exemple Java</button>
+            </div>
+
+            <!-- ══════════════════════════════════════════════
+                 ONGLET 1 — ISBN unique
+            ══════════════════════════════════════════════ -->
+            <div class="tab-pane active" id="tab-single" style="margin-top:1.5rem;">
+                <label class="form-label">ISBN (10 ou 13 chiffres, tirets et espaces acceptés)</label>
+                <div class="d-flex gap-2">
+                    <input
+                        id="singleIsbnInput"
+                        type="text"
+                        class="form-control-custom flex-grow-1"
+                        placeholder="ex. 978-2-84161-085-6"
+                        spellcheck="false"
+                        autocomplete="off"
+                    />
+                    <button id="singleFindBtn" class="btn-primary-grad">Rechercher</button>
+                </div>
+
+                <!-- Chargement -->
+                <div class="single-loading" id="singleLoading">
+                    <div class="spinner-orbit"></div>
+                    <p>Recherche en cours sur toutes les sources…</p>
+                </div>
+
+                <!-- Non trouvé -->
+                <div class="single-not-found" id="singleNotFound">
+                    <p style="font-size:1.2rem;margin:0 0 0.25rem;font-weight:700;">Couverture introuvable</p>
+                    <p style="font-size:0.85rem;margin:0;color:var(--red);opacity:0.8;">Sources consultées : OpenLibrary, Google Books, Amazon (6 régions), BNF, Goodreads, Bing, Yandex, DuckDuckGo.</p>
+                </div>
+
+                <!-- Résultat -->
+                <div class="single-cover-result" id="singleResult">
+
+                    <!-- Layout : couvertures + infos -->
+                    <div class="result-layout">
+
+                        <!-- Colonne gauche : les deux couvertures empilées -->
+                        <div class="result-covers-col">
+                            <div style="display:flex;flex-direction:column;gap:1rem;">
+                                <!-- Couverture proxy -->
+                                <div class="cover-slot">
+                                    <img id="singleCoverImg" src="" alt="Couverture du livre" />
+                                    <span class="cover-badge">Proxy</span>
+                                </div>
+                                <!-- Couverture Google Books (affichée si dispo) -->
+                                <div class="cover-slot" id="gbCoverSlot" style="display:none;">
+                                    <img id="gbCoverImg" src="" alt="Couverture Google Books" />
+                                    <span class="cover-badge">Google Books</span>
+                                </div>
+                            </div>
+
+                            <!-- Méta proxy -->
+                            <div class="meta-strip" style="margin-top:0.875rem;width:160px;">
+                                <span class="meta-key">ISBN</span>    <span class="meta-val" id="metaIsbn">—</span>
+                                <span class="meta-key">Source</span>  <span class="meta-val" id="metaSource">—</span>
+                                <span class="meta-key">Format</span>  <span class="meta-val" id="metaMime">—</span>
+                                <span class="meta-key">Taille</span>  <span class="meta-val" id="metaSize">—</span>
+                            </div>
+                            <div class="cover-actions">
+                                <a id="singleOpenBtn" href="#" target="_blank" rel="noopener" class="btn-ghost-line" style="text-decoration:none;font-size:0.8rem;padding:0.5rem 0.875rem;">Ouvrir l'original</a>
+                                <button id="singleDownloadBtn" class="btn-primary-grad" style="padding:0.5rem 0.875rem;font-size:0.8rem;">Télécharger</button>
+                            </div>
+                        </div>
+
+                        <!-- Colonne droite : données Google Books -->
+                        <div class="result-meta-col">
+
+                            <!-- Skeleton GB -->
+                            <div class="gb-skeleton" id="gbSkeleton">
+                                <div class="skel-line wide"></div>
+                                <div class="skel-line med"></div>
+                                <div class="skel-line narrow" style="margin-bottom:1.25rem;"></div>
+                                <div class="skel-line wide"></div>
+                                <div class="skel-line med"></div>
+                                <div class="skel-line wide"></div>
+                                <div class="skel-line narrow"></div>
+                            </div>
+
+                            <!-- Pas de données GB -->
+                            <div class="gb-no-result" id="gbNoResult">
+                                Aucune donnée Google Books disponible pour cet ISBN.
+                            </div>
+
+                            <!-- Données GB -->
+                            <div class="gb-card" id="gbCard" style="display:none;">
+                                <div class="gb-card-header">
+                                    <h4 class="gb-title" id="gbTitle"></h4>
+                                    <p class="gb-subtitle" id="gbSubtitle" style="display:none;"></p>
+                                    <p class="gb-authors" id="gbAuthors"></p>
+                                </div>
+
+                                <div class="gb-meta-grid" id="gbMetaGrid">
+                                    <!-- filled by JS -->
+                                </div>
+
+                                <div class="gb-description-wrap" id="gbDescWrap" style="display:none;">
+                                    <h5>Description</h5>
+                                    <div class="gb-description-text clamped" id="gbDescText"></div>
+                                    <button class="btn-read-more" id="gbReadMore" style="display:none;" onclick="toggleDescription()">Lire la suite</button>
+                                </div>
+
+                                <div class="gb-actions" id="gbActions">
+                                    <!-- filled by JS -->
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════
+                 ONGLET 2 — Lot (traitement serveur)
+            ══════════════════════════════════════════════ -->
+            <div class="tab-pane" id="tab-batch" style="margin-top:1.5rem;">
+
+                <!-- ── SECTION 1 : Lancer un nouveau lot ── -->
+                <div id="batchLaunchSection">
+
+                    <!-- Drop zone fichier -->
+                    <div id="batchDropZone" style="border:2px dashed var(--border-strong);border-radius:var(--radius-md);padding:1.25rem;text-align:center;cursor:pointer;transition:background 0.2s,border-color 0.2s;background:var(--bg-inset);margin-bottom:0.75rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:0.5rem;display:block;margin-inline:auto;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <p style="margin:0 0 0.35rem;font-weight:600;font-size:0.9rem;color:var(--text-secondary);">Déposer un fichier .txt ou .csv</p>
+                        <p style="margin:0;font-size:0.78rem;color:var(--text-muted);">ou cliquer pour sélectionner</p>
+                        <input id="batchFileInput" type="file" accept=".txt,.csv" style="display:none;" />
+                    </div>
+                    <p class="helper-text" id="batchFileInfo" style="margin-bottom:0.75rem;min-height:1.2em;"></p>
+
+                    <div id="batchResumeBanner" class="resume-banner" style="display:none;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                            <div>
+                                <strong>Traitement en cours détecté</strong>
+                                <div id="batchResumeInfo" style="color:var(--text-secondary);font-size:0.85rem;margin-top:0.25rem;"></div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button id="batchResumeBtn" class="btn-primary-grad" style="padding:0.55rem 1rem;font-size:0.85rem;">Reprendre</button>
+                                <button id="batchDiscardBtn" class="btn-ghost-line" style="padding:0.5rem 0.9rem;font-size:0.85rem;">Abandonner</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="form-label">ISBNs — un par ligne ou séparés par des virgules</label>
+                    <textarea
+                        id="batchIsbnInput"
+                        class="form-control-custom"
+                        placeholder="9780143126393&#10;2356353046&#10;9782070612758&#10;..."
+                        spellcheck="false"></textarea>
+                    <p class="helper-text" id="batchIsbnCount">0 ISBN détecté</p>
+
+                    <div style="margin-top:1rem;">
+                        <label class="form-label" style="margin-bottom:0.4rem;">Items max par ZIP <span style="font-weight:400;color:var(--text-muted);">(optionnel)</span></label>
+                        <input id="batchPerPart" type="number" min="10" placeholder="illimité — un seul ZIP"
+                            class="form-control-custom" style="font-family:'DM Sans',sans-serif;max-width:280px;" />
+                        <p class="helper-text">Vide = un seul ZIP. Ex : 500 → plusieurs ZIPs de 500 couvertures chacun.</p>
+                    </div>
+
+                    <div class="info-callout amber" style="margin-top:1rem;">
+                        <strong>ZIP côté serveur :</strong> le backend traite tous les ISBNs, assemble le ZIP et vous l'envoie en streaming. Durée estimée : 12–25&nbsp;min pour 1&nbsp;500 ISBNs. Vous pouvez fermer cet onglet — la progression reprend à la réouverture.<br/>
+                        <span style="color:var(--text-muted);font-size:0.78rem;">Estimé ~50 Ko par couverture · 1&nbsp;500 ISBN ≈ 75&nbsp;Mo sur disque</span>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-3">
+                        <button id="batchStartBtn" class="btn-primary-grad flex-grow-1" disabled>Lancer le traitement</button>
+                        <button id="batchSampleBtn" class="btn-ghost-line">Exemple</button>
+                    </div>
+                </div>
+
+                <!-- Progression (SSE actif) -->
+                <div class="batch-progress-wrap" id="batchProgress">
+                    <div class="text-center">
+                        <div class="spinner-orbit"></div>
+                        <h3 style="font-weight:700;margin-bottom:0.25rem;color:var(--text-primary);">Traitement en cours sur le serveur…</h3>
+                        <div class="current-isbn" id="batchCurrentIsbn">Initialisation</div>
+                        <div class="current-isbn" style="font-size:0.8rem;color:var(--text-muted);" id="batchCurrentSource"></div>
+                    </div>
+
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="batchProgressFill"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="batchProgressText">0 / 0</span>
+                        <span id="batchProgressPct">0&nbsp;%</span>
+                    </div>
+
+                    <div class="eta-row">
+                        <span id="batchElapsed">Écoulé : 0:00</span>
+                        <span id="batchEta">ETA : —</span>
+                    </div>
+
+                    <div class="live-counts" style="margin-top:1.25rem;">
+                        <div class="count-pill ok">
+                            <div class="num" id="batchLiveOk">0</div>
+                            <div class="lbl">Trouvés</div>
+                        </div>
+                        <div class="count-pill ko">
+                            <div class="num" id="batchLiveKo">0</div>
+                            <div class="lbl">Manquants</div>
+                        </div>
+                        <div class="count-pill pending">
+                            <div class="num" id="batchLivePending">0</div>
+                            <div class="lbl">En attente</div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <p style="color:var(--text-muted);font-size:0.75rem;">Le serveur continue — vous pouvez fermer l'onglet et revenir plus tard.</p>
+                    </div>
+                </div>
+
+                <!-- État terminé -->
+                <div class="batch-done-wrap" id="batchDone">
+                    <div class="text-center" style="padding:1.5rem 0 1rem;">
+                        <div style="width:52px;height:52px;background:var(--green-soft);border:1px solid rgba(5,150,105,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </div>
+                        <h3 style="font-weight:700;margin-bottom:0.25rem;color:var(--text-primary);">Traitement terminé</h3>
+                        <p style="color:var(--text-secondary);" id="batchDoneSummary">Votre ZIP est prêt.</p>
+                    </div>
+                    <div class="d-flex gap-2 mt-2">
+                        <a id="batchDownloadLink" href="#" download class="btn-primary-grad flex-grow-1 text-center" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.5rem;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Télécharger le ZIP
+                        </a>
+                        <button id="batchNewBtn" class="btn-ghost-line">Nouveau lot</button>
+                    </div>
+                </div>
+
+                <!-- ── SECTION 3 : Lots existants ── -->
+                <div id="batchListSection" style="margin-top:2.5rem;padding-top:2rem;border-top:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.5rem;">
+                        <h2 style="font-family:'DM Serif Display',serif;font-weight:400;font-size:1.35rem;margin:0;color:var(--text-primary);">Lots existants</h2>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                            <button id="batchRefreshListBtn" class="btn-ghost-line" style="padding:0.45rem 1rem;font-size:0.82rem;display:inline-flex;align-items:center;gap:0.4rem;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                Actualiser
+                            </button>
+                            <button id="wipeCacheBtn" class="btn-ghost-line" style="padding:0.45rem 1rem;font-size:0.82rem;display:inline-flex;align-items:center;gap:0.4rem;color:#b91c1c;border-color:rgba(220,38,38,0.35);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                                Vider le cache serveur
+                            </button>
+                        </div>
+                    </div>
+                    <div id="batchListLoading" style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.875rem;">Chargement des lots…</div>
+                    <div id="batchListEmpty" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);font-size:0.875rem;border:1px dashed var(--border-strong);border-radius:var(--radius-md);">Aucun lot trouvé.</div>
+                    <div id="batchListItems"></div>
+                </div>
+
+            </div>
+
+            <!-- ══════════════════════════════════════════════
+                 ONGLET 3 — Architecture
+            ══════════════════════════════════════════════ -->
+            <div class="tab-pane" id="tab-arch" style="margin-top:1.5rem;">
+
+                <!-- 1. Le problème -->
+                <div class="arch-section">
+                    <h3><span class="section-num">1</span> Le problème</h3>
+                    <p>À partir d'un ISBN, récupérer une vraie couverture et pousser le taux de réussite aussi proche de 100&nbsp;% que possible — y compris pour les catalogues islamiques français et arabes où les APIs grand public (OpenLibrary, Google Books) tombent à ~60–70&nbsp;%. Le pipeline enchaîne 5 phases de fallback à travers <strong>21 sources</strong> sur 11 noms d'hôtes distincts ; chaque phase ne se déclenche que si la précédente n'a pas retourné de couverture valide.</p>
+                </div>
+
+                <div class="arch-divider"></div>
+
+                <!-- 2. Pipeline -->
+                <div class="arch-section">
+                    <h3><span class="section-num">2</span> Pipeline — chaîne de fallback en 5 phases</h3>
+                    <div class="chart-wrap">
+                        <div id="pipelineChart" style="height:380px;"></div>
+                    </div>
+                    <p class="chart-caption">Chaque phase est une course ou une boucle séquentielle ; la première couverture valide court-circuite les phases suivantes.</p>
+                </div>
+
+                <div class="arch-divider"></div>
+
+                <!-- 3. Filtres qualité -->
+                <div class="arch-section">
+                    <h3><span class="section-num">3</span> Filtres qualité — ce qui est rejeté</h3>
+                    <div class="chart-wrap">
+                        <div id="filtersChart" style="height:280px;"></div>
+                    </div>
+                    <p class="chart-caption">Filtres appliqués à chaque image candidate avant acceptation. L'ordre d'exécution va du plus rapide (URL) au plus coûteux (décodage image).</p>
+                    <div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem;">
+                        <span class="tag-pill">canva</span>
+                        <span class="tag-pill">freepik</span>
+                        <span class="tag-pill">shutterstock</span>
+                        <span class="tag-pill">getty</span>
+                        <span class="tag-pill">istockphoto</span>
+                        <span class="tag-pill">depositphotos</span>
+                        <span class="tag-pill">alamy</span>
+                        <span class="tag-pill">dreamstime</span>
+                    </div>
+                    <p class="helper-text" style="margin-top:0.5rem;">Liste de blocage des domaines de banques d'images — ces URLs ne contiennent jamais de vraies couvertures.</p>
+                </div>
+
+                <div class="arch-divider"></div>
+
+                <!-- 4. Anti-ban -->
+                <div class="arch-section">
+                    <h3><span class="section-num">4</span> Stratégie anti-ban</h3>
+                    <div class="callout-grid">
+                        <div class="callout-card">
+                            <div class="callout-title">Concurrence limitée par hôte</div>
+                            <div class="callout-body">Sémaphore par nom d'hôte. Défaut = 2 requêtes en parallèle. Surcharges : googleapis &amp; openlibrary = 8, m.media-amazon.com = 4, backapi.leonardo-service.com = 4.</div>
+                        </div>
+                        <div class="callout-card">
+                            <div class="callout-title">Gigue aléatoire</div>
+                            <div class="callout-body">Pause aléatoire avant chaque requête : 50–200 ms (HTTP simple), 80–300 ms (hôtes Cloudflare). Casse le rythme uniforme inter-requêtes.</div>
+                        </div>
+                        <div class="callout-card">
+                            <div class="callout-title">Rotation de User-Agent</div>
+                            <div class="callout-body">Round-robin atomique sur 6 chaînes UA bureau (Chrome / Firefox / Safari / Edge sur Mac / Windows / Linux). Un UA par requête.</div>
+                        </div>
+                        <div class="callout-card">
+                            <div class="callout-title">Retry unique sur 429 / 503</div>
+                            <div class="callout-body">Une seule nouvelle tentative après 600–1400 ms aléatoires — pas d'escalade exponentielle. Les échecs passent à la source suivante.</div>
+                        </div>
+                        <div class="callout-card">
+                            <div class="callout-title">Usurpation TLS</div>
+                            <div class="callout-body">CycleTLS + cloudscraper_go pour les sites Cloudflare JS (maison-ennour, tawhid, sana). Imite un vrai ClientHello Chrome.</div>
+                        </div>
+                        <div class="callout-card">
+                            <div class="callout-title">Diversification des sources</div>
+                            <div class="callout-body">21 sources distinctes sur 11 hôtes. Un blocage sur l'un (Amazon-FR, Bing) laisse 20 autres intacts — dégradation gracieuse sans interruption.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arch-divider"></div>
+
+                <!-- 5. Cache -->
+                <div class="arch-section">
+                    <h3><span class="section-num">5</span> Cache</h3>
+                    <div class="chart-wrap">
+                        <div id="cacheChart" style="height:220px;"></div>
+                    </div>
+                    <p class="chart-caption">Cache disque à <code style="font-family:'JetBrains Mono',monospace;font-size:0.8em;">/cache/&lt;isbn&gt;.json</code>. Clé = ISBN normalisé. Un hit saute tout le pipeline et répond en &lt; 50 ms. Nettoyeur lancé toutes les 24 h.</p>
+                    <div class="info-callout green" style="margin-top:0.75rem;">
+                        <strong>TTL positif :</strong> 30 jours (couvertures trouvées restent en cache) &nbsp;·&nbsp; <strong>TTL négatif :</strong> 7 jours (les 404 sont retentés plus tôt — les sources s'améliorent avec le temps).
+                    </div>
+                </div>
+
+                <div class="arch-divider"></div>
+
+                <!-- 6. Écueils -->
+                <div class="arch-section">
+                    <h3><span class="section-num">6</span> Problèmes rencontrés &amp; résolus</h3>
+                    <ul class="pitfall-list">
+                        <li>
+                            <span class="check">&#10003;</span>
+                            <span><strong style="color:var(--text-primary);">Fausses couvertures banques d'images</strong> — des modèles Canva apparaissaient dans les résultats Bing/Yandex. Résolu par liste de blocage de domaines + filtre ratio portrait (rejet si l/h hors 0,45–0,95).</span>
+                        </li>
+                        <li>
+                            <span class="check">&#10003;</span>
+                            <span><strong style="color:var(--text-primary);">Pages WooCommerce « aucun résultat »</strong> — les sites islamiques français (Tawhid, Sana) retournent une grille « vous aimerez aussi » pour les ISBN inconnus. Résolu par détection de la classe CSS <code style="font-family:'JetBrains Mono',monospace;font-size:0.8em;">search-no-results</code> et vérification de la présence de l'ISBN sur la page produit.</span>
+                        </li>
+                        <li>
+                            <span class="check">&#10003;</span>
+                            <span><strong style="color:var(--text-primary);">Mauvaises éditions</strong> — même titre sous plusieurs ISBN ; la recherche image retournait la mauvaise édition. Résolu par vérification stricte que l'ISBN apparaît dans l'URL ou le texte de la page produit.</span>
+                        </li>
+                        <li>
+                            <span class="check">&#10003;</span>
+                            <span><strong style="color:var(--text-primary);">Cloudflare sur les librairies islamiques françaises</strong> — maison-ennour, edition-tawhid, librairie-sana bloquent les clients HTTP Go natifs. Résolu avec CycleTLS + cloudscraper_go.</span>
+                        </li>
+                        <li>
+                            <span class="check">&#10003;</span>
+                            <span><strong style="color:var(--text-primary);">albouraq.fr est une SPA React</strong> — le HTML rendu ne contient pas les données produit. Résolu en reverse-engineerant son endpoint REST <code style="font-family:'JetBrains Mono',monospace;font-size:0.8em;">backapi.leonardo-service.com/api/sofiadis/albouraq/articles?smart_search=&lt;isbn&gt;</code>.</span>
+                        </li>
+                        <li>
+                            <span class="check">&#10003;</span>
+                            <span><strong style="color:var(--text-primary);">Saturation mémoire navigateur à 1 500+ ISBNs</strong> — JSZip côté client avec 1 500 images base64 atteignait 2–4 Go de heap. Résolu en déplaçant l'assemblage ZIP côté serveur ; le navigateur ne gère qu'un lien de téléchargement en streaming.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="arch-divider"></div>
+
+                <!-- 7. Timing bout en bout -->
+                <div class="arch-section">
+                    <h3><span class="section-num">7</span> Chronométrage bout en bout</h3>
+                    <div class="chart-wrap">
+                        <div id="timingChart" style="height:260px;"></div>
+                    </div>
+                    <p class="chart-caption">Latence typique par ISBN selon la phase qui trouve en premier. Un échec total (404) épuise toutes les phases séquentiellement.</p>
+                </div>
+
+            </div><!-- /tab-arch -->
+
+            <!-- ══════════════════════════════════════════════
+                 ONGLET 4 — Exemple Java (code client du ZIP)
+            ══════════════════════════════════════════════ -->
+            <div class="tab-pane" id="tab-java" style="margin-top:1.5rem;">
+                <h3>Afficher les couvertures en Java Swing</h3>
+                <p style="color:var(--text-secondary);font-size:0.9rem;">Swing pur — aucun framework externe. Charge les images depuis un dossier local (ex. : le ZIP décompressé) <strong>et/ou</strong> depuis des URLs distantes.</p>
+
+                <div class="info-callout">
+                    <strong>Fichiers dans le ZIP</strong> : nommés exactement <code style="font-family:'JetBrains Mono',monospace;">&lt;isbn-saisi&gt;.jpg</code> (tirets et espaces préservés) — accès direct : <code style="font-family:'JetBrains Mono',monospace;">new File(folder, isbn + ".jpg")</code>.
+                </div>
+
+                <h4>1) Lire et afficher une image locale</h4>
+                <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button><span class="code-cmt">// CoverViewerLocal.java — javac CoverViewerLocal.java &amp;&amp; java CoverViewerLocal /path/to/covers 9780143126393</span>
+<span class="code-kw">import</span> javax.imageio.ImageIO;
+<span class="code-kw">import</span> javax.swing.*;
+<span class="code-kw">import</span> java.awt.*;
+<span class="code-kw">import</span> java.awt.image.BufferedImage;
+<span class="code-kw">import</span> java.io.File;
+
+<span class="code-kw">public class</span> <span class="code-cls">CoverViewerLocal</span> {
+    <span class="code-kw">public static void</span> main(String[] args) <span class="code-kw">throws</span> Exception {
+        File folder = <span class="code-kw">new</span> <span class="code-cls">File</span>(args[<span class="code-num">0</span>]);
+        String isbn  = args[<span class="code-num">1</span>];
+        File jpg = <span class="code-kw">new</span> <span class="code-cls">File</span>(folder, isbn + <span class="code-str">".jpg"</span>);
+
+        BufferedImage img = ImageIO.read(jpg);          <span class="code-cmt">// reads JPEG/PNG/GIF</span>
+        <span class="code-kw">if</span> (img == <span class="code-kw">null</span>) <span class="code-kw">throw new</span> <span class="code-cls">RuntimeException</span>(<span class="code-str">"Not an image: "</span> + jpg);
+
+        JFrame f = <span class="code-kw">new</span> <span class="code-cls">JFrame</span>(<span class="code-str">"Cover - "</span> + isbn);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.add(<span class="code-kw">new</span> <span class="code-cls">JLabel</span>(<span class="code-kw">new</span> <span class="code-cls">ImageIcon</span>(img)));
+        f.pack();
+        f.setLocationRelativeTo(<span class="code-kw">null</span>);
+        f.setVisible(<span class="code-kw">true</span>);
+    }
+}</div>
+
+                <h4>2) Charger une image distante depuis une URL</h4>
+                <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button><span class="code-cmt">// CoverViewerRemote.java — fetches over HTTP without any framework</span>
+<span class="code-kw">import</span> javax.imageio.ImageIO;
+<span class="code-kw">import</span> javax.swing.*;
+<span class="code-kw">import</span> java.awt.image.BufferedImage;
+<span class="code-kw">import</span> java.net.HttpURLConnection;
+<span class="code-kw">import</span> java.net.URL;
+
+<span class="code-kw">public class</span> <span class="code-cls">CoverViewerRemote</span> {
+    <span class="code-kw">public static</span> BufferedImage fetch(String url) <span class="code-kw">throws</span> Exception {
+        HttpURLConnection c = (HttpURLConnection) <span class="code-kw">new</span> <span class="code-cls">URL</span>(url).openConnection();
+        c.setRequestProperty(<span class="code-str">"User-Agent"</span>, <span class="code-str">"Mozilla/5.0"</span>);   <span class="code-cmt">// Amazon &amp; co reject default UA</span>
+        c.setConnectTimeout(<span class="code-num">5000</span>);
+        c.setReadTimeout(<span class="code-num">10000</span>);
+        <span class="code-kw">try</span> (var in = c.getInputStream()) {
+            <span class="code-kw">return</span> ImageIO.read(in);
+        }
+    }
+
+    <span class="code-kw">public static void</span> main(String[] args) <span class="code-kw">throws</span> Exception {
+        String isbn = args[<span class="code-num">0</span>];                           <span class="code-cmt">// e.g. "9780143126393"</span>
+        String url  = <span class="code-str">"https://covers.openlibrary.org/b/isbn/"</span> + isbn + <span class="code-str">"-L.jpg?default=false"</span>;
+
+        BufferedImage img = fetch(url);
+        <span class="code-kw">if</span> (img == <span class="code-kw">null</span>) <span class="code-kw">throw new</span> <span class="code-cls">RuntimeException</span>(<span class="code-str">"No cover for "</span> + isbn);
+
+        JFrame f = <span class="code-kw">new</span> <span class="code-cls">JFrame</span>(<span class="code-str">"Cover - "</span> + isbn);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.add(<span class="code-kw">new</span> <span class="code-cls">JLabel</span>(<span class="code-kw">new</span> <span class="code-cls">ImageIcon</span>(img)));
+        f.pack();
+        f.setLocationRelativeTo(<span class="code-kw">null</span>);
+        f.setVisible(<span class="code-kw">true</span>);
+    }
+}</div>
+
+                <h4>3) Galerie : charger toutes les couvertures d'un dossier</h4>
+                <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button><span class="code-cmt">// CoverGallery.java — grid view of all .jpg files in a folder</span>
+<span class="code-kw">import</span> javax.imageio.ImageIO;
+<span class="code-kw">import</span> javax.swing.*;
+<span class="code-kw">import</span> java.awt.*;
+<span class="code-kw">import</span> java.awt.image.BufferedImage;
+<span class="code-kw">import</span> java.io.File;
+
+<span class="code-kw">public class</span> <span class="code-cls">CoverGallery</span> {
+    <span class="code-kw">private static</span> JLabel makeThumb(File f, <span class="code-kw">int</span> w, <span class="code-kw">int</span> h) <span class="code-kw">throws</span> Exception {
+        BufferedImage src = ImageIO.read(f);
+        Image scaled = src.getScaledInstance(w, h, Image.SCALE_SMOOTH);
+        JLabel lbl = <span class="code-kw">new</span> <span class="code-cls">JLabel</span>(<span class="code-kw">new</span> <span class="code-cls">ImageIcon</span>(scaled), JLabel.CENTER);
+        lbl.setText(f.getName().replace(<span class="code-str">".jpg"</span>, <span class="code-str">""</span>));
+        lbl.setVerticalTextPosition(JLabel.BOTTOM);
+        lbl.setHorizontalTextPosition(JLabel.CENTER);
+        lbl.setForeground(Color.LIGHT_GRAY);
+        <span class="code-kw">return</span> lbl;
+    }
+
+    <span class="code-kw">public static void</span> main(String[] args) <span class="code-kw">throws</span> Exception {
+        File folder = <span class="code-kw">new</span> <span class="code-cls">File</span>(args[<span class="code-num">0</span>]);
+        File[] files = folder.listFiles((d, n) -&gt; n.toLowerCase().endsWith(<span class="code-str">".jpg"</span>));
+        <span class="code-kw">if</span> (files == <span class="code-kw">null</span>) files = <span class="code-kw">new</span> File[<span class="code-num">0</span>];
+
+        JPanel grid = <span class="code-kw">new</span> <span class="code-cls">JPanel</span>(<span class="code-kw">new</span> <span class="code-cls">GridLayout</span>(<span class="code-num">0</span>, <span class="code-num">5</span>, <span class="code-num">12</span>, <span class="code-num">12</span>));
+        grid.setBackground(Color.DARK_GRAY);
+        grid.setBorder(BorderFactory.createEmptyBorder(<span class="code-num">12</span>, <span class="code-num">12</span>, <span class="code-num">12</span>, <span class="code-num">12</span>));
+        <span class="code-kw">for</span> (File f : files) grid.add(makeThumb(f, <span class="code-num">120</span>, <span class="code-num">180</span>));
+
+        JFrame frame = <span class="code-kw">new</span> <span class="code-cls">JFrame</span>(<span class="code-str">"Cover Gallery — "</span> + files.length + <span class="code-str">" books"</span>);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.add(<span class="code-kw">new</span> <span class="code-cls">JScrollPane</span>(grid));
+        frame.setSize(<span class="code-num">820</span>, <span class="code-num">700</span>);
+        frame.setLocationRelativeTo(<span class="code-kw">null</span>);
+        frame.setVisible(<span class="code-kw">true</span>);
+    }
+}</div>
+
+                <div class="info-callout">
+                    <strong>Conseil :</strong> exécutez chaque exemple avec <code style="font-family:'JetBrains Mono',monospace;">javac Fichier.java &amp;&amp; java Fichier &lt;args&gt;</code> sur JDK 11+. Pour de grandes galeries, effectuez les I/O hors de l'EDT (utilisez <code style="font-family:'JetBrains Mono',monospace;">SwingWorker</code>) — ces extraits restent minimalistes pour la clarté.
+                </div>
+            </div><!-- /tab-java -->
+
+        </div><!-- /glass-card -->
+    </main>
+
+    <div id="toast" class="toast-msg"></div>
+
+    <script>
+    // ─── Constantes ──────────────────────────────────────────────────────────────
+    const API_BASE  = 'https://proxy.hbfs-cloud.net';
+    const GB_API_KEY = 'AIzaSyD5iZVNzyrD-rC5vmbTW3tXbHIINYqlOOY';
+
+    // ─── Portail d'authentification ──────────────────────────────────────────────
+    // The access code is never embedded in this page. The user types it, the
+    // server validates it via /auth, and only then is it persisted locally
+    // and sent on subsequent requests as X-Auth.
+    const LS_KEY = 'isbn_unlock';
+
+    function getAuthToken() {
+        try { return localStorage.getItem(LS_KEY) || ''; } catch(e) { return ''; }
+    }
+    function clearAuth() {
+        try { localStorage.removeItem(LS_KEY); } catch(e) {}
+    }
+
+    async function verifyToken(code) {
+        try {
+            const r = await fetch(API_BASE + '/auth', { method: 'GET', headers: { 'X-Auth': code } });
+            return r.ok;
+        } catch (e) { return false; }
+    }
+
+    function showAuthGate() {
+        const gate = document.getElementById('authGate');
+        gate.style.display = 'flex';
+        document.getElementById('authError').style.display = 'none';
+        document.getElementById('authInput').value = '';
+        setTimeout(() => document.getElementById('authInput').focus(), 50);
+    }
+
+    (async function initAuth() {
+        const submitBtn = document.getElementById('authSubmit');
+        const errEl = document.getElementById('authError');
+        const inputEl = document.getElementById('authInput');
+
+        async function trySubmit() {
+            const val = inputEl.value.trim();
+            errEl.style.display = 'none';
+            if (!val) return;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Vérification…';
+            const ok = await verifyToken(val);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Activer le proxy';
+            if (ok) {
+                try { localStorage.setItem(LS_KEY, val); } catch(e) {}
+                document.getElementById('authGate').style.display = 'none';
+            } else {
+                errEl.style.display = 'block';
+                inputEl.select();
+            }
+        }
+
+        submitBtn.addEventListener('click', trySubmit);
+        inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmit(); });
+
+        const existing = getAuthToken();
+        if (existing && await verifyToken(existing)) return;
+        clearAuth();
+        showAuthGate();
+    })();
+
+    // ─── Utilitaires partagés ─────────────────────────────────────────────────────
+    function showToast(msg, type = 'error') {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = 'toast-msg ' + type;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 3000);
+    }
+
+    function formatBytes(n) {
+        if (n < 1024) return n + ' o';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' Ko';
+        return (n / (1024 * 1024)).toFixed(2) + ' Mo';
+    }
+
+    window.copyCode = function (btn) {
+        const block = btn.closest('.code-block');
+        if (!block) return;
+        const text = Array.from(block.childNodes)
+            .filter(n => !(n.nodeType === 1 && n.classList && n.classList.contains('copy-btn')))
+            .map(n => n.textContent)
+            .join('');
+        navigator.clipboard.writeText(text).then(() => {
+            const orig = btn.textContent;
+            btn.textContent = 'Copié !';
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+        }).catch(() => showToast('Presse-papiers inaccessible', 'error'));
+    };
+
+    function formatDuration(ms) {
+        const s = Math.floor(ms / 1000);
+        const m = Math.floor(s / 60);
+        return m + ':' + String(s % 60).padStart(2, '0');
+    }
+
+    function parseInputIsbns(raw) {
+        if (!raw) return [];
+        const out = [];
+        const seen = new Set();
+        const lines = raw.split(/[\n,;\t|]+/);
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line || line.startsWith('#') || line.startsWith('//')) continue;
+            const cleaned = line.replace(/[^\dX]/gi, '').toUpperCase();
+            if (cleaned.length === 10 || cleaned.length === 13) {
+                if (!seen.has(cleaned)) { seen.add(cleaned); out.push(line); }
+                continue;
+            }
+            const matches = line.match(/(?:97[89](?:[\s\-]?\d){10}|(?:\d[\s\-]?){9}[\dXx])/g);
+            if (matches) {
+                for (const m of matches) {
+                    const c = m.replace(/[^\dX]/gi, '').toUpperCase();
+                    if ((c.length === 10 || c.length === 13) && !seen.has(c)) {
+                        seen.add(c); out.push(m.trim());
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // ONGLET 1 — ISBN unique
+    // ══════════════════════════════════════════════════════════════════════════════
+    let _singleDataUrl = null;
+    let _singleSourceUrl = null;
+    let _gbDescExpanded = false;
+
+    window.toggleDescription = function() {
+        const el = document.getElementById('gbDescText');
+        const btn = document.getElementById('gbReadMore');
+        _gbDescExpanded = !_gbDescExpanded;
+        el.classList.toggle('clamped', !_gbDescExpanded);
+        btn.textContent = _gbDescExpanded ? 'Réduire' : 'Lire la suite';
+    };
+
+    function singleReset() {
+        document.getElementById('singleResult').classList.remove('visible');
+        document.getElementById('singleNotFound').classList.remove('visible');
+        document.getElementById('singleLoading').classList.remove('visible');
+    }
+
+    function gbReset() {
+        document.getElementById('gbSkeleton').classList.remove('visible');
+        document.getElementById('gbNoResult').classList.remove('visible');
+        document.getElementById('gbCard').style.display = 'none';
+        document.getElementById('gbCoverSlot').style.display = 'none';
+    }
+
+    // Pick the largest available image from Google Books imageLinks
+    function pickGbCover(imageLinks) {
+        if (!imageLinks) return null;
+        const order = ['extraLarge', 'large', 'medium', 'small', 'thumbnail', 'smallThumbnail'];
+        for (const k of order) {
+            if (imageLinks[k]) {
+                return imageLinks[k].replace(/^http:/, 'https:');
+            }
+        }
+        return null;
+    }
+
+    function renderStars(avg) {
+        if (!avg) return '';
+        const full = Math.round(avg);
+        return '★'.repeat(full) + '☆'.repeat(Math.max(0, 5 - full));
+    }
+
+    function sanitizeHtml(html) {
+        // Strip tags for safe rendering; keep line breaks as spaces
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || '';
+    }
+
+    function renderGbData(info) {
+        // Title / subtitle / authors
+        document.getElementById('gbTitle').textContent = info.title || 'Titre inconnu';
+        const subtitleEl = document.getElementById('gbSubtitle');
+        if (info.subtitle) {
+            subtitleEl.textContent = info.subtitle;
+            subtitleEl.style.display = 'block';
+        } else {
+            subtitleEl.style.display = 'none';
+        }
+        const authors = (info.authors || []).join(', ');
+        document.getElementById('gbAuthors').textContent = authors || '';
+
+        // Two-column metadata grid
+        const grid = document.getElementById('gbMetaGrid');
+        grid.innerHTML = '';
+        const rows = [];
+
+        if (info.publisher)     rows.push(['Éditeur',      info.publisher]);
+        if (info.publishedDate) rows.push(['Date',          info.publishedDate]);
+        if (info.pageCount)     rows.push(['Pages',         info.pageCount]);
+        if (info.language)      rows.push(['Langue',        info.language]);
+        if (info.printType)     rows.push(['Type',          info.printType]);
+        if (info.categories && info.categories.length)
+            rows.push(['Catégories', info.categories.join(' · ')]);
+
+        // ISBNs
+        if (info.industryIdentifiers && info.industryIdentifiers.length) {
+            for (const id of info.industryIdentifiers) {
+                rows.push([id.type.replace('_', '-'), id.identifier]);
+            }
+        }
+
+        // Rating
+        if (info.averageRating) {
+            const ratingHtml = `<span class="gb-rating"><span class="gb-stars">${renderStars(info.averageRating)}</span> ${info.averageRating.toFixed(1)}${info.ratingsCount ? ' <span style="color:var(--text-muted);font-family:\'DM Sans\',sans-serif;">(' + info.ratingsCount + ' avis)</span>' : ''}</span>`;
+            const keyEl = document.createElement('span');
+            keyEl.className = 'gb-meta-key';
+            keyEl.textContent = 'Note';
+            const valEl = document.createElement('span');
+            valEl.className = 'gb-meta-val prose';
+            valEl.innerHTML = ratingHtml;
+            grid.appendChild(keyEl);
+            grid.appendChild(valEl);
+        }
+
+        for (const [k, v] of rows) {
+            const keyEl = document.createElement('span');
+            keyEl.className = 'gb-meta-key';
+            keyEl.textContent = k;
+            const valEl = document.createElement('span');
+            valEl.className = 'gb-meta-val prose';
+            valEl.textContent = String(v);
+            grid.appendChild(keyEl);
+            grid.appendChild(valEl);
+        }
+
+        // Description
+        const descWrap = document.getElementById('gbDescWrap');
+        const descText = document.getElementById('gbDescText');
+        const readMoreBtn = document.getElementById('gbReadMore');
+        if (info.description) {
+            const plainDesc = sanitizeHtml(info.description);
+            descText.textContent = plainDesc;
+            _gbDescExpanded = false;
+            descText.classList.add('clamped');
+            // Show "Lire la suite" only if text is long enough to be clamped
+            const isLong = plainDesc.length > 300;
+            readMoreBtn.style.display = isLong ? 'inline' : 'none';
+            descWrap.style.display = 'block';
+        } else {
+            descWrap.style.display = 'none';
+        }
+
+        // Action buttons
+        const actionsEl = document.getElementById('gbActions');
+        actionsEl.innerHTML = '';
+        if (info.previewLink) {
+            const a = document.createElement('a');
+            a.href = info.previewLink.replace(/^http:/, 'https:');
+            a.target = '_blank'; a.rel = 'noopener noreferrer';
+            a.className = 'btn-action';
+            a.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Aperçu Google Books`;
+            actionsEl.appendChild(a);
+        }
+        if (info.infoLink) {
+            const a = document.createElement('a');
+            a.href = info.infoLink.replace(/^http:/, 'https:');
+            a.target = '_blank'; a.rel = 'noopener noreferrer';
+            a.className = 'btn-action';
+            a.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Fiche complète`;
+            actionsEl.appendChild(a);
+        }
+        if (info.canonicalVolumeLink) {
+            const a = document.createElement('a');
+            a.href = info.canonicalVolumeLink.replace(/^http:/, 'https:');
+            a.target = '_blank'; a.rel = 'noopener noreferrer';
+            a.className = 'btn-action';
+            a.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Lien canonique`;
+            actionsEl.appendChild(a);
+        }
+
+        document.getElementById('gbCard').style.display = 'block';
+    }
+
+    async function fetchGoogleBooks(isbn) {
+        const cleanIsbn = isbn.replace(/[^\dX]/gi, '');
+        const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanIsbn}&langRestrict=fr&key=${GB_API_KEY}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('GB HTTP ' + resp.status);
+        return await resp.json();
+    }
+
+    document.getElementById('singleFindBtn').addEventListener('click', async () => {
+        const rawIsbn = document.getElementById('singleIsbnInput').value.trim();
+        if (!rawIsbn) return;
+
+        const token = getAuthToken();
+        singleReset();
+        gbReset();
+        _gbDescExpanded = false;
+        document.getElementById('singleLoading').classList.add('visible');
+        document.getElementById('singleFindBtn').disabled = true;
+
+        // Show GB skeleton as soon as loading starts
+        document.getElementById('gbSkeleton').classList.add('visible');
+
+        try {
+            // Run proxy call and Google Books in parallel
+            const [proxyResult, gbResult] = await Promise.allSettled([
+                fetch(API_BASE + '/cover', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'X-Auth': token } : {}),
+                    },
+                    body: JSON.stringify({ isbn: rawIsbn }),
+                }),
+                fetchGoogleBooks(rawIsbn),
+            ]);
+
+            // ── Handle proxy result ──
+            let proxyOk = false;
+            if (proxyResult.status === 'fulfilled') {
+                const resp = proxyResult.value;
+                if (resp.status === 404) {
+                    const j = await resp.json().catch(() => ({}));
+                    proxyOk = !!j.found;
+                } else if (resp.ok) {
+                    const j = await resp.json();
+                    if (j.found && j.image_b64) {
+                        proxyOk = true;
+                        const mime = j.mime || 'image/jpeg';
+                        const dataUrl = `data:${mime};base64,${j.image_b64}`;
+                        const byteSize = Math.floor(j.image_b64.length * 0.75);
+                        _singleDataUrl = dataUrl;
+                        _singleSourceUrl = j.url || null;
+                        document.getElementById('singleCoverImg').src = dataUrl;
+                        document.getElementById('metaIsbn').textContent   = j.isbn || rawIsbn;
+                        document.getElementById('metaSource').textContent = j.source || '—';
+                        document.getElementById('metaMime').textContent   = mime;
+                        document.getElementById('metaSize').textContent   = formatBytes(byteSize);
+                        const openBtn = document.getElementById('singleOpenBtn');
+                        if (_singleSourceUrl) {
+                            openBtn.href = _singleSourceUrl;
+                            openBtn.style.display = '';
+                        } else {
+                            openBtn.style.display = 'none';
+                        }
+                    }
+                }
+            }
+
+            // ── Handle Google Books result ──
+            document.getElementById('gbSkeleton').classList.remove('visible');
+            if (gbResult.status === 'fulfilled') {
+                const gbData = gbResult.value;
+                if (gbData.totalItems > 0 && gbData.items && gbData.items[0]) {
+                    const info = gbData.items[0].volumeInfo;
+                    renderGbData(info);
+                    // GB cover
+                    const gbCoverUrl = pickGbCover(info.imageLinks);
+                    if (gbCoverUrl) {
+                        const gbImgEl = document.getElementById('gbCoverImg');
+                        gbImgEl.src = gbCoverUrl;
+                        document.getElementById('gbCoverSlot').style.display = 'flex';
+                    }
+                } else {
+                    document.getElementById('gbNoResult').classList.add('visible');
+                }
+            } else {
+                document.getElementById('gbNoResult').classList.add('visible');
+            }
+
+            // ── Show result or not-found ──
+            singleReset();
+            if (proxyOk) {
+                document.getElementById('singleResult').classList.add('visible');
+            } else {
+                document.getElementById('singleNotFound').classList.add('visible');
+            }
+
+        } catch (err) {
+            singleReset();
+            showToast('Erreur : ' + err.message, 'error');
+        } finally {
+            document.getElementById('singleFindBtn').disabled = false;
+        }
+    });
+
+    document.getElementById('singleIsbnInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('singleFindBtn').click();
+    });
+
+    document.getElementById('singleDownloadBtn').addEventListener('click', () => {
+        if (!_singleDataUrl) return;
+        const isbn = document.getElementById('metaIsbn').textContent || 'couverture';
+        const a = document.createElement('a');
+        a.href = _singleDataUrl;
+        a.download = isbn + '.jpg';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    });
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // ONGLET 2 — Lot (SSE côté serveur + dashboard multi-lots)
+    // ══════════════════════════════════════════════════════════════════════════════
+    const BATCH_LS_KEY      = 'isbn_batch_job';
+    const BATCH_PERPART_KEY = 'isbn_batch_perpart'; // keyed by job_id
+
+    function saveBatchJob(jobId, total, started) {
+        try { localStorage.setItem(BATCH_LS_KEY, JSON.stringify({ jobId, total, started })); } catch(e) {}
+    }
+    function loadBatchJob() {
+        try { return JSON.parse(localStorage.getItem(BATCH_LS_KEY) || 'null'); } catch(e) { return null; }
+    }
+    function clearBatchJob() {
+        try { localStorage.removeItem(BATCH_LS_KEY); } catch(e) {}
+    }
+    function savePerPart(jobId, perPart) {
+        try {
+            const map = JSON.parse(localStorage.getItem(BATCH_PERPART_KEY) || '{}');
+            if (perPart > 0) map[jobId] = perPart; else delete map[jobId];
+            localStorage.setItem(BATCH_PERPART_KEY, JSON.stringify(map));
+        } catch(e) {}
+    }
+    function loadPerPart(jobId) {
+        try { return JSON.parse(localStorage.getItem(BATCH_PERPART_KEY) || '{}')[jobId] || 0; } catch(e) { return 0; }
+    }
+
+    // ── Human-readable size ───────────────────────────────────────────────────────
+    function formatSize(bytes) {
+        if (!bytes || bytes === 0) return '—';
+        if (bytes < 1024) return bytes + ' o';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' Go';
+    }
+
+    // ── Download time estimate ────────────────────────────────────────────────────
+    function formatEta(seconds) {
+        if (seconds < 60) return seconds.toFixed(1) + ' s';
+        return (seconds / 60).toFixed(1) + ' min';
+    }
+    function downloadEtaLine(bytes) {
+        if (!bytes || bytes === 0) return '';
+        const at50  = formatEta((bytes * 8) / (50  * 1_000_000));
+        const at5   = formatEta((bytes * 8) / (5   * 1_000_000));
+        return `~${at50} @ 50 Mb/s · ~${at5} @ 5 Mb/s`;
+    }
+
+    // ── French date DD/MM/YYYY à HH:MM ───────────────────────────────────────────
+    function frDate(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        if (isNaN(d)) return iso;
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} à ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    // ── Short ID (first 8 chars) ──────────────────────────────────────────────────
+    function shortId(id) { return id ? id.slice(0, 8) : '—'; }
+
+    // ── Status label ──────────────────────────────────────────────────────────────
+    function statusBadge(status) {
+        const map = {
+            finished: ['terminé', 'done'],
+            done:     ['terminé', 'done'],
+            running:  ['en cours', 'running'],
+            error:    ['erreur', 'error'],
+        };
+        const [label, cls] = map[status] || ['inconnu', 'error'];
+        return `<span class="batch-status-badge ${cls}">${label}</span>`;
+    }
+
+    // ── Confirm modal ─────────────────────────────────────────────────────────────
+    // opts: { title, body, confirmLabel, confirmClass, cancelLabel }
+    // confirmClass: 'btn-danger' | 'btn-primary-grad' (default: btn-danger)
+    function showConfirm(opts, onConfirm) {
+        // Back-compat: plain string → legacy delete confirm
+        if (typeof opts === 'string') {
+            opts = { title: 'Confirmation', body: opts, confirmLabel: 'Supprimer', confirmClass: 'btn-danger' };
+        }
+        const {
+            title        = 'Confirmation',
+            body         = '',
+            confirmLabel = 'Confirmer',
+            confirmClass = 'btn-danger',
+            cancelLabel  = 'Annuler',
+        } = opts;
+
+        const backdrop = document.createElement('div');
+        backdrop.className = 'confirm-modal-backdrop';
+        backdrop.innerHTML =
+            '<div class="confirm-modal" role="dialog" aria-modal="true">' +
+            '<h3>' + title + '</h3>' +
+            '<p>' + body + '</p>' +
+            '<div class="confirm-modal-btns">' +
+            '<button class="btn-ghost-line confirm-no" style="flex:1;">' + cancelLabel + '</button>' +
+            '<button class="' + confirmClass + ' confirm-yes" style="flex:1;">' + confirmLabel + '</button>' +
+            '</div></div>';
+        document.body.appendChild(backdrop);
+
+        const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); };
+        backdrop.querySelector('.confirm-yes').addEventListener('click', () => { close(); onConfirm(); });
+        backdrop.querySelector('.confirm-no').addEventListener('click', close);
+        backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+
+        const onKey = e => { if (e.key === 'Escape') close(); };
+        document.addEventListener('keydown', onKey);
+
+        // Focus cancel by default (safer UX — no accidental confirm)
+        requestAnimationFrame(() => { const btn = backdrop.querySelector('.confirm-no'); if (btn) btn.focus(); });
+    }
+
+    // ── Copy to clipboard ─────────────────────────────────────────────────────────
+    function copyText(text, el) {
+        navigator.clipboard.writeText(text).then(() => {
+            const orig = el.textContent;
+            el.textContent = 'copié !';
+            setTimeout(() => { el.textContent = orig; }, 1200);
+        }).catch(() => {});
+    }
+
+    // ── Build download URL for a batch (with optional split) ──────────────────────
+    function zipUrl(jobId, perPart, part, total) {
+        const token = getAuthToken();
+        let url = `${API_BASE}/batch/${jobId}/zip`;
+        const params = [];
+        if (token)   params.push('auth=' + encodeURIComponent(token));
+        if (perPart) params.push('perPart=' + perPart);
+        if (part)    params.push('part=' + part);
+        if (params.length) url += '?' + params.join('&');
+        return url;
+    }
+
+    // ── Render a single batch row ─────────────────────────────────────────────────
+    function renderBatchRow(b) {
+        const perPart = loadPerPart(b.id);
+        const totalParts = (perPart > 0 && b.total > 0) ? Math.ceil(b.total / perPart) : 1;
+
+        const div = document.createElement('div');
+        div.className = 'batch-row';
+        div.dataset.batchId = b.id;
+
+        // Build download buttons HTML
+        let dlHtml = '';
+        if (totalParts <= 1) {
+            dlHtml = `<a href="${zipUrl(b.id,0,0,1)}" download class="btn-action" style="text-decoration:none;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Télécharger ZIP</a>`;
+        } else {
+            for (let i = 1; i <= totalParts; i++) {
+                dlHtml += `<a href="${zipUrl(b.id,perPart,i,totalParts)}" download class="btn-action" style="text-decoration:none;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Part ${i}/${totalParts}</a>`;
+            }
+        }
+
+        const sizeStr = formatSize(b.size_bytes);
+        const etaStr  = downloadEtaLine(b.size_bytes);
+
+        div.innerHTML = `
+            <div class="batch-row-header">
+                <div class="batch-row-meta">
+                    <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.4rem;">
+                        ${statusBadge(b.status)}
+                        <span class="batch-row-id" title="Cliquer pour copier">${shortId(b.id)}</span>
+                        <span style="color:var(--text-muted);font-size:0.78rem;">${frDate(b.created)}</span>
+                    </div>
+                    <div class="batch-counts">
+                        <span class="count-badge-found">${b.found ?? 0} trouvés</span>
+                        <span class="count-badge-missing">${b.missing ?? 0} manquants</span>
+                        <span style="color:var(--text-muted);font-size:0.75rem;padding:0.15rem 0;">${b.total ?? 0} total</span>
+                    </div>
+                    ${(b.first_input || b.last_input) ? `<div class="batch-isbn-preview">${b.first_input || '?'} → ${b.last_input || '?'}</div>` : ''}
+                    <div class="batch-size-info">${sizeStr}</div>
+                    ${etaStr ? `<div class="batch-eta-info">${etaStr}</div>` : ''}
+                </div>
+                <div class="batch-row-actions">
+                    ${(b.status === 'finished' || b.status === 'done') ? dlHtml : ''}
+                    ${b.size_bytes > 200 * 1024 * 1024 ? '<button class="btn-ghost-line batch-split-toggle" style="font-size:0.78rem;padding:0.4rem 0.75rem;" title="Diviser en plusieurs parts pour téléchargement plus rapide">Diviser</button>' : ''}
+                    <button class="btn-danger batch-delete-btn" style="padding:0.4rem 0.75rem;font-size:0.78rem;background:var(--red-soft);color:var(--red);border:1px solid rgba(220,38,38,0.25);box-shadow:none;" title="Supprimer ce lot">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                    </button>
+                </div>
+            </div>
+            ${b.size_bytes > 200 * 1024 * 1024 ? `
+            <div class="batch-split-inline" id="split-${b.id}">
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);">Items max par part :</label>
+                <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.4rem;flex-wrap:wrap;">
+                    <input type="number" min="10" placeholder="ex. 500" value="${perPart || ''}"
+                        class="form-control-custom split-perpart-input"
+                        style="max-width:140px;padding:0.5rem 0.75rem;font-family:'DM Sans',sans-serif;" />
+                    <button class="btn-primary-grad split-apply-btn" style="padding:0.5rem 1rem;font-size:0.82rem;">Appliquer</button>
+                </div>
+                <div class="batch-split-parts" id="split-parts-${b.id}"></div>
+            </div>` : ''}`;
+
+        // Copy ID on click
+        div.querySelector('.batch-row-id').addEventListener('click', function() {
+            copyText(b.id, this);
+        });
+
+        // Split toggle (only present when ZIP > 200 MB)
+        const splitToggle = div.querySelector('.batch-split-toggle');
+        if (splitToggle) {
+            splitToggle.addEventListener('click', () => {
+                div.querySelector(`#split-${b.id}`).classList.toggle('open');
+            });
+        }
+
+        // Split apply
+        const splitApply = div.querySelector('.split-apply-btn');
+        if (splitApply) {
+            splitApply.addEventListener('click', () => {
+                const val = parseInt(div.querySelector('.split-perpart-input').value) || 0;
+                savePerPart(b.id, val);
+                const newRow = renderBatchRow({...b});
+                div.replaceWith(newRow);
+                newRow.querySelector(`#split-${b.id}`).classList.add('open');
+            });
+        }
+
+        // Delete
+        div.querySelector('.batch-delete-btn').addEventListener('click', () => {
+            showConfirm('Supprimer ce lot ? Cette action est irréversible.', async () => {
+                const token = getAuthToken();
+                try {
+                    await fetch(`${API_BASE}/batch/${b.id}/delete`, {
+                        method: 'DELETE',
+                        headers: token ? { 'X-Auth': token } : {},
+                    });
+                    div.remove();
+                    showToast('Lot supprimé', 'success');
+                } catch(err) {
+                    showToast('Erreur lors de la suppression : ' + err.message, 'error');
+                }
+            });
+        });
+
+        return div;
+    }
+
+    // ── Fetch and render all batches ──────────────────────────────────────────────
+    let _batchListPollTimer = null;
+
+    async function fetchBatchList() {
+        const token = getAuthToken();
+        const loadingEl = document.getElementById('batchListLoading');
+        const emptyEl   = document.getElementById('batchListEmpty');
+        const itemsEl   = document.getElementById('batchListItems');
+        loadingEl.style.display = 'block';
+        emptyEl.style.display   = 'none';
+        try {
+            const resp = await fetch(`${API_BASE}/batches`, {
+                headers: token ? { 'X-Auth': token } : {},
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            const batches = data.batches || [];
+            loadingEl.style.display = 'none';
+            itemsEl.innerHTML = '';
+            if (!batches.length) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+            for (const b of batches) {
+                itemsEl.appendChild(renderBatchRow(b));
+            }
+            // Poll every 5s if any batch is running
+            const anyRunning = batches.some(b => b.status === 'running');
+            if (anyRunning) {
+                clearTimeout(_batchListPollTimer);
+                _batchListPollTimer = setTimeout(fetchBatchList, 5000);
+            } else {
+                clearTimeout(_batchListPollTimer);
+            }
+        } catch(err) {
+            loadingEl.style.display = 'none';
+            itemsEl.innerHTML = `<div class="info-callout red" style="margin:0;">Impossible de charger les lots : ${err.message}</div>`;
+        }
+    }
+
+    document.getElementById('batchRefreshListBtn').addEventListener('click', fetchBatchList);
+
+    // ── File drop zone ────────────────────────────────────────────────────────────
+    const dropZone    = document.getElementById('batchDropZone');
+    const fileInput   = document.getElementById('batchFileInput');
+    const fileInfoEl  = document.getElementById('batchFileInfo');
+
+    function parseFileIsbns(text, filename) {
+        let lines;
+        if (filename && filename.toLowerCase().endsWith('.csv')) {
+            // CSV: first column, skip header if non-numeric
+            lines = text.split(/\r?\n/);
+            const header = lines[0] || '';
+            if (!/^\d/.test(header.split(',')[0].trim())) lines = lines.slice(1);
+            lines = lines.map(l => l.split(',')[0].trim()).filter(Boolean);
+        } else {
+            lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        }
+        return parseInputIsbns(lines.join('\n'));
+    }
+
+    function handleFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const parsed = parseFileIsbns(e.target.result, file.name);
+            const isbnTextarea = document.getElementById('batchIsbnInput');
+            isbnTextarea.value = parsed.join('\n');
+            isbnTextarea.dispatchEvent(new Event('input'));
+            fileInfoEl.textContent = `${parsed.length} ISBN détecté${parsed.length !== 1 ? 's' : ''} dans \`${file.name}\``;
+            fileInfoEl.style.display = 'block';
+        };
+        reader.readAsText(file);
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dropzone-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dropzone-over'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('dropzone-over');
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+    });
+
+    // ── SSE progress ──────────────────────────────────────────────────────────────
+    let _batchEs = null;
+    let _batchTotal = 0;
+    let _batchStarted = 0;
+    let _elapsedTimer = null;
+    let _batchJobId = null;
+
+    const bEl = {
+        isbnInput:   document.getElementById('batchIsbnInput'),
+        isbnCount:   document.getElementById('batchIsbnCount'),
+        startBtn:    document.getElementById('batchStartBtn'),
+        sampleBtn:   document.getElementById('batchSampleBtn'),
+        progress:    document.getElementById('batchProgress'),
+        currentIsbn: document.getElementById('batchCurrentIsbn'),
+        currentSrc:  document.getElementById('batchCurrentSource'),
+        fill:        document.getElementById('batchProgressFill'),
+        text:        document.getElementById('batchProgressText'),
+        pct:         document.getElementById('batchProgressPct'),
+        elapsed:     document.getElementById('batchElapsed'),
+        eta:         document.getElementById('batchEta'),
+        liveOk:      document.getElementById('batchLiveOk'),
+        liveKo:      document.getElementById('batchLiveKo'),
+        livePending: document.getElementById('batchLivePending'),
+        done:        document.getElementById('batchDone'),
+        doneSummary: document.getElementById('batchDoneSummary'),
+        downloadLink:document.getElementById('batchDownloadLink'),
+        newBtn:      document.getElementById('batchNewBtn'),
+        resumeBanner:document.getElementById('batchResumeBanner'),
+        resumeInfo:  document.getElementById('batchResumeInfo'),
+        resumeBtn:   document.getElementById('batchResumeBtn'),
+        discardBtn:  document.getElementById('batchDiscardBtn'),
+    };
+
+    function batchShowProgress() {
+        bEl.progress.classList.add('visible');
+        bEl.done.classList.remove('visible');
+    }
+    function batchShowDone() {
+        bEl.progress.classList.remove('visible');
+        bEl.done.classList.add('visible');
+        if (_elapsedTimer) { clearInterval(_elapsedTimer); _elapsedTimer = null; }
+        // Refresh the list after completion
+        setTimeout(fetchBatchList, 800);
+    }
+
+    function batchUpdateProgress(done, found, missing, total, currentIsbn, currentSrc) {
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        bEl.fill.style.width = pct + '%';
+        bEl.text.textContent = `${done} / ${total}`;
+        bEl.pct.textContent  = pct + '\u00a0%';
+        bEl.liveOk.textContent      = found;
+        bEl.liveKo.textContent      = missing;
+        bEl.livePending.textContent = Math.max(0, total - done);
+        if (currentIsbn) bEl.currentIsbn.textContent = currentIsbn;
+        if (currentSrc)  bEl.currentSrc.textContent  = 'via ' + currentSrc;
+        if (_batchStarted && done > 0 && total > 0) {
+            const elapsed = Date.now() - _batchStarted;
+            const rate = done / elapsed;
+            const remaining = total - done;
+            const etaMs = remaining / rate;
+            bEl.eta.textContent = 'ETA\u00a0: ' + formatDuration(etaMs);
+        }
+    }
+
+    function startElapsedTicker() {
+        if (_elapsedTimer) clearInterval(_elapsedTimer);
+        _elapsedTimer = setInterval(() => {
+            if (!_batchStarted) return;
+            bEl.elapsed.textContent = 'Écoulé\u00a0: ' + formatDuration(Date.now() - _batchStarted);
+        }, 1000);
+    }
+
+    function connectBatchSse(jobId, total, started) {
+        _batchJobId = jobId;
+        _batchTotal = total;
+        _batchStarted = started || Date.now();
+        batchShowProgress();
+        startElapsedTicker();
+        batchUpdateProgress(0, 0, 0, total, 'Connexion…', '');
+        const token = getAuthToken();
+        const url = `${API_BASE}/batch/${jobId}/events${token ? '?auth=' + encodeURIComponent(token) : ''}`;
+        if (_batchEs) _batchEs.close();
+        _batchEs = new EventSource(url);
+        _batchEs.addEventListener('progress', e => {
+            try {
+                const d = JSON.parse(e.data);
+                batchUpdateProgress(d.done||0, d.found||0, d.missing||0, d.total||total, d.isbn||'', d.source||'');
+            } catch(err) {}
+        });
+        _batchEs.addEventListener('finished', e => {
+            _batchEs.close(); _batchEs = null;
+            let d = {};
+            try { d = JSON.parse(e.data); } catch(err) {}
+            clearBatchJob();
+            const found   = d.found   || 0;
+            const missing = d.missing || 0;
+            const tot     = d.total   || total;
+            const rate    = tot ? Math.round((found / tot) * 100) : 0;
+            bEl.doneSummary.textContent = `${found}/${tot} couvertures (${rate}\u00a0% de réussite)`;
+            const perPart = parseInt(document.getElementById('batchPerPart').value) || 0;
+            savePerPart(jobId, perPart);
+            const dl = zipUrl(jobId, perPart && perPart > 0 ? perPart : 0, perPart > 0 ? 1 : 0, 1);
+            bEl.downloadLink.href     = dl;
+            bEl.downloadLink.download = `couvertures-${jobId.slice(0,8)}.zip`;
+            batchShowDone();
+        });
+        _batchEs.onerror = () => {
+            bEl.currentIsbn.textContent = 'Connexion perdue — rafraîchissez pour reconnecter';
+        };
+    }
+
+    bEl.isbnInput.addEventListener('input', () => {
+        const list = parseInputIsbns(bEl.isbnInput.value);
+        bEl.isbnCount.textContent = list.length + (list.length <= 1 ? ' ISBN détecté' : ' ISBNs détectés');
+        bEl.startBtn.disabled = list.length === 0;
+    });
+
+    bEl.sampleBtn.addEventListener('click', () => {
+        bEl.isbnInput.value = [
+            '9780143126393',
+            '2356353046',
+            '978-2-07-061275-8',
+            '9782848622460',
+            '9782745122537',
+            '080442957X',
+        ].join('\n');
+        bEl.isbnInput.dispatchEvent(new Event('input'));
+    });
+
+    bEl.startBtn.addEventListener('click', () => {
+        const isbns = parseInputIsbns(bEl.isbnInput.value);
+        if (!isbns.length) return;
+        const n = isbns.length;
+        const sizeMb = Math.round(n * 50 / 1024);
+        let bodyText = n + ' ISBN seront traités. Estimation ~ ' + sizeMb + ' Mo de couvertures.';
+        if (n > 500) bodyText += '<br><span style="color:var(--text-muted);font-size:0.82em;">Le téléchargement peut prendre plusieurs minutes.</span>';
+        showConfirm({
+            title:        'Lancer un nouveau lot ?',
+            body:         bodyText,
+            confirmLabel: 'Lancer le lot',
+            confirmClass: 'btn-primary-grad',
+            cancelLabel:  'Annuler',
+        }, async () => {
+            const token = getAuthToken();
+            bEl.startBtn.disabled = true;
+            try {
+                const resp = await fetch(API_BASE + '/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Auth': token } : {}) },
+                    body: JSON.stringify({ isbns }),
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const j = await resp.json();
+                const jobId = j.job_id;
+                const total = j.total || isbns.length;
+                const started = Date.now();
+                saveBatchJob(jobId, total, started);
+                connectBatchSse(jobId, total, started);
+                // Refresh list to show new batch
+                setTimeout(fetchBatchList, 1000);
+            } catch (err) {
+                showToast('Impossible de lancer le traitement : ' + err.message, 'error');
+                bEl.startBtn.disabled = false;
+            }
+        });
+    });
+
+    bEl.newBtn.addEventListener('click', () => {
+        clearBatchJob();
+        bEl.isbnInput.value = '';
+        bEl.isbnCount.textContent = '0 ISBN détecté';
+        bEl.startBtn.disabled = true;
+        bEl.resumeBanner.style.display = 'none';
+        bEl.progress.classList.remove('visible');
+        bEl.done.classList.remove('visible');
+    });
+
+    (function checkBatchResume() {
+        const saved = loadBatchJob();
+        if (!saved) return;
+        bEl.resumeInfo.textContent = `Lot ${saved.jobId} — ${saved.total} ISBNs, démarré le ${new Date(saved.started).toLocaleString('fr-FR')}`;
+        bEl.resumeBanner.style.display = 'block';
+        bEl.resumeBtn.addEventListener('click', () => {
+            bEl.resumeBanner.style.display = 'none';
+            connectBatchSse(saved.jobId, saved.total, saved.started);
+        });
+        bEl.discardBtn.addEventListener('click', () => {
+            clearBatchJob();
+            bEl.resumeBanner.style.display = 'none';
+        });
+    })();
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // ONGLET 3 — Graphiques Architecture (eCharts)
+    // ══════════════════════════════════════════════════════════════════════════════
+    function initArchCharts() {
+        const LABEL_COLOR   = '#78716c';
+        const AXIS_LINE     = 'rgba(0,0,0,0.08)';
+        const SPLIT_LINE    = 'rgba(0,0,0,0.05)';
+        const TOOLTIP_BG    = '#ffffff';
+        const TOOLTIP_TEXT  = '#1c1917';
+        const TOOLTIP_BORDER= '#e5e3de';
+
+        // ── Pipeline ──────────────────────────────────────────────────────────────
+        const pipelineEl = document.getElementById('pipelineChart');
+        const pipelineChart = echarts.init(pipelineEl, null, { renderer: 'canvas' });
+
+        const phases = [
+            { name: 'Phase 1 — Race APIs rapides (6 s)', value: 6, color: '#059669',
+              detail: 'OpenLibrary (ISBN-13 + ISBN-10) · Google Books · Amazon ×7 régions · BNF SRU — en parallèle, premier hit gagne' },
+            { name: 'Phase 2 — Récup. titre + auteurs (3 s)', value: 3, color: '#6366f1',
+              detail: 'Lancée en parallèle avec Phase 1. Google Books → fallback OpenLibrary. Utilisée comme entrée de recherche pour Phases 3 & 4.' },
+            { name: 'Phase 3 — Race librairies islamiques FR (9 s)', value: 9, color: '#a855f7',
+              detail: 'maison-ennour, edition-tawhid, librairie-sana (WooCommerce + cloudscraper) · albouraq via REST backapi.leonardo-service.com' },
+            { name: 'Phase 4 — Scraping méta séquentiel', value: 7, color: '#d97706',
+              detail: 'bing-meta · yandex-meta · ddg-meta · goodreads-meta — budget 7 s chacun. Requête = titre + premier auteur.' },
+            { name: 'Phase 5 — Fallback ISBN brut séquentiel', value: 6, color: '#dc2626',
+              detail: 'goodreads · bing-images · yandex-images · ddg-images — budget 6 s chacun. Requête = ISBN brut.' },
+        ];
+
+        pipelineChart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'axis', axisPointer: { type: 'shadow' },
+                backgroundColor: TOOLTIP_BG, borderColor: TOOLTIP_BORDER,
+                textStyle: { color: TOOLTIP_TEXT, fontSize: 12 },
+                formatter: params => {
+                    const p = phases[params[0].dataIndex];
+                    return `<strong>${p.name}</strong><br/><span style="color:#78716c;font-size:0.8em">${p.detail}</span>`;
+                },
+            },
+            grid: { left: '2%', right: '5%', top: '5%', bottom: '10%', containLabel: true },
+            xAxis: {
+                type: 'value', name: 'Budget max (s)',
+                nameTextStyle: { color: LABEL_COLOR, fontSize: 11 },
+                axisLine: { lineStyle: { color: AXIS_LINE } },
+                splitLine: { lineStyle: { color: SPLIT_LINE } },
+                axisLabel: { color: LABEL_COLOR, formatter: v => v + 's' },
+            },
+            yAxis: {
+                type: 'category', data: phases.map(p => p.name),
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { color: LABEL_COLOR, fontSize: 11 },
+            },
+            series: [{
+                type: 'bar',
+                data: phases.map(p => ({ value: p.value, itemStyle: { color: p.color, borderRadius: [0, 6, 6, 0] } })),
+                label: { show: true, position: 'insideRight', color: '#fff', fontSize: 11, formatter: p => phases[p.dataIndex].value + 's' },
+                barMaxWidth: 36,
+            }],
+        });
+
+        // ── Filtres qualité ───────────────────────────────────────────────────────
+        const filtersEl = document.getElementById('filtersChart');
+        const filtersChart = echarts.init(filtersEl, null, { renderer: 'canvas' });
+
+        filtersChart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'axis', axisPointer: { type: 'shadow' },
+                backgroundColor: TOOLTIP_BG, borderColor: TOOLTIP_BORDER,
+                textStyle: { color: TOOLTIP_TEXT },
+            },
+            grid: { left: '2%', right: '8%', top: '8%', bottom: '5%', containLabel: true },
+            xAxis: {
+                type: 'value',
+                axisLabel: { color: LABEL_COLOR },
+                splitLine: { lineStyle: { color: SPLIT_LINE } },
+                axisLine: { lineStyle: { color: AXIS_LINE } },
+            },
+            yAxis: {
+                type: 'category',
+                data: [
+                    'Détection page WooCommerce sans résultat',
+                    "L'ISBN doit figurer sur la page produit",
+                    'Liste de blocage domaines banques d\'images',
+                    'Ratio portrait 0,45–0,95',
+                    'Min 80×120 px, max 4 000×6 000 px',
+                ],
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { color: LABEL_COLOR, fontSize: 11 },
+            },
+            series: [{
+                type: 'bar',
+                data: [
+                    { value: 1, itemStyle: { color: '#059669', borderRadius: [0,6,6,0] } },
+                    { value: 2, itemStyle: { color: '#6366f1', borderRadius: [0,6,6,0] } },
+                    { value: 3, itemStyle: { color: '#a855f7', borderRadius: [0,6,6,0] } },
+                    { value: 4, itemStyle: { color: '#d97706', borderRadius: [0,6,6,0] } },
+                    { value: 5, itemStyle: { color: '#dc2626', borderRadius: [0,6,6,0] } },
+                ],
+                label: { show: true, position: 'right', color: LABEL_COLOR, fontSize: 11, formatter: p => 'ordre #' + p.value },
+                barMaxWidth: 28,
+            }],
+        });
+
+        // ── Cache ─────────────────────────────────────────────────────────────────
+        const cacheEl = document.getElementById('cacheChart');
+        const cacheChart = echarts.init(cacheEl, null, { renderer: 'canvas' });
+
+        const cacheRows = [
+            { name: 'Cycle de nettoyage',            value: 1,  color: '#6366f1' },
+            { name: 'TTL négatif (404 retentés)',     value: 7,  color: '#dc2626' },
+            { name: 'TTL positif (couvertures gardées)', value: 30, color: '#059669' },
+        ];
+        cacheChart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'axis', axisPointer: { type: 'shadow' },
+                backgroundColor: TOOLTIP_BG, borderColor: TOOLTIP_BORDER,
+                textStyle: { color: TOOLTIP_TEXT },
+                formatter: p => `<strong>${p[0].name}</strong><br/>${p[0].value} jour${p[0].value > 1 ? 's' : ''}`,
+            },
+            grid: { left: '2%', right: '10%', top: '5%', bottom: '5%', containLabel: true },
+            xAxis: {
+                type: 'value', name: 'jours',
+                nameTextStyle: { color: LABEL_COLOR, fontSize: 11 },
+                axisLabel: { color: LABEL_COLOR, formatter: v => v + 'j' },
+                splitLine: { lineStyle: { color: SPLIT_LINE } },
+                axisLine: { lineStyle: { color: AXIS_LINE } },
+            },
+            yAxis: {
+                type: 'category', data: cacheRows.map(r => r.name),
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { color: LABEL_COLOR, fontSize: 11 },
+            },
+            series: [{
+                type: 'bar',
+                data: cacheRows.map(r => ({ value: r.value, itemStyle: { color: r.color, borderRadius: [0,6,6,0] } })),
+                label: { show: true, position: 'right', color: LABEL_COLOR, fontSize: 11, formatter: p => p.value + ' jour' + (p.value > 1 ? 's' : '') },
+                barMaxWidth: 28,
+            }],
+        });
+
+        // ── Timing ───────────────────────────────────────────────────────────────
+        const timingEl = document.getElementById('timingChart');
+        const timingChart = echarts.init(timingEl, null, { renderer: 'canvas' });
+
+        const timingData = [
+            { label: 'Lecture cache',                         lo: 0,   hi: 0.05, color: '#059669' },
+            { label: 'Phase 1 (race APIs rapides)',            lo: 0.3, hi: 6,    color: '#6366f1' },
+            { label: 'Phase 3 (librairies islamiques FR)',     lo: 6,   hi: 15,   color: '#a855f7' },
+            { label: 'Phase 4 (scraping méta)',                lo: 15,  hi: 22,   color: '#d97706' },
+            { label: 'Échec total (capped à 25 s)',            lo: 22,  hi: 25,   color: '#dc2626' },
+        ];
+
+        timingChart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'axis', axisPointer: { type: 'shadow' },
+                backgroundColor: TOOLTIP_BG, borderColor: TOOLTIP_BORDER,
+                textStyle: { color: TOOLTIP_TEXT },
+                formatter: params => {
+                    const d = timingData[params[0].dataIndex];
+                    return `<strong>${d.label}</strong><br/>${d.lo}–${d.hi} s`;
+                },
+            },
+            grid: { left: '2%', right: '8%', top: '5%', bottom: '5%', containLabel: true },
+            xAxis: {
+                type: 'value', name: 'secondes',
+                nameTextStyle: { color: LABEL_COLOR, fontSize: 11 },
+                axisLabel: { color: LABEL_COLOR, formatter: v => v + 's' },
+                splitLine: { lineStyle: { color: SPLIT_LINE } },
+                axisLine: { lineStyle: { color: AXIS_LINE } },
+            },
+            yAxis: {
+                type: 'category', data: timingData.map(d => d.label),
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { color: LABEL_COLOR, fontSize: 11 },
+            },
+            series: [
+                {
+                    type: 'bar', stack: 'timing',
+                    data: timingData.map(d => ({ value: d.lo, itemStyle: { color: 'transparent' } })),
+                    barMaxWidth: 28,
+                },
+                {
+                    type: 'bar', stack: 'timing',
+                    data: timingData.map(d => ({ value: d.hi - d.lo, itemStyle: { color: d.color, borderRadius: [0,6,6,0] } })),
+                    label: {
+                        show: true, position: 'right', color: LABEL_COLOR, fontSize: 11,
+                        formatter: p => { const d = timingData[p.dataIndex]; return d.lo === 0 && d.hi < 0.1 ? '<0,1 s' : d.lo + '–' + d.hi + ' s'; },
+                    },
+                    barMaxWidth: 28,
+                },
+            ],
+        });
+
+        window.addEventListener('resize', () => {
+            pipelineChart.resize();
+            filtersChart.resize();
+            cacheChart.resize();
+            timingChart.resize();
+        });
+    }
+
+    // ── Vider le cache serveur ───────────────────────────────────────────────────
+    document.getElementById('wipeCacheBtn').addEventListener('click', () => {
+        showConfirm({
+            title:        'Vider le cache serveur ?',
+            body:         'Toutes les couvertures déjà téléchargées seront effacées. Les prochaines requêtes devront réinterroger les sources externes (plus lent, plus de risque de blocage). Les lots existants restent disponibles.',
+            confirmLabel: 'Vider le cache',
+            confirmClass: 'btn-danger',
+            cancelLabel:  'Annuler',
+        }, async () => {
+            const token = getAuthToken();
+            try {
+                const resp = await fetch(API_BASE + '/cache/wipe', {
+                    method: 'POST',
+                    headers: token ? { 'X-Auth': token } : {},
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const j = await resp.json();
+                const removed = j.removed || 0;
+                const bytes   = j.bytes   || 0;
+                const fmt = new Intl.NumberFormat('fr-FR');
+                showToast(
+                    'Cache serveur vidé : ' + fmt.format(removed) + ' entrée' + (removed !== 1 ? 's' : '') +
+                    ' (' + formatBytes(bytes) + ')',
+                    'success'
+                );
+            } catch(err) {
+                showToast('Erreur lors du vidage du cache : ' + err.message, 'error');
+            }
+        });
+    });
+
+    // ── Commutation d'onglets ─────────────────────────────────────────────────────
+    let _chartsInited = false;
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            if (btn.dataset.tab === 'arch' && !_chartsInited) {
+                _chartsInited = true;
+                setTimeout(initArchCharts, 60);
+            }
+            if (btn.dataset.tab === 'batch') {
+                fetchBatchList();
+            }
+        });
+    });
+
+    </script>
+</body>
+</html>

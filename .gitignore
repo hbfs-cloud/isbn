@@ -1,0 +1,7 @@
+.omc/
+.playwright-mcp/
+.DS_Store
+server/cache/
+
+server/isbn-proxy
+*.exe

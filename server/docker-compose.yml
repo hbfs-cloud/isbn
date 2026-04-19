@@ -1,0 +1,27 @@
+services:
+  isbn-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: isbn-proxy:latest
+    container_name: isbn-proxy
+    restart: unless-stopped
+    environment:
+      ADDR: ":8080"
+      AUTH_TOKEN: "${AUTH_TOKEN:?AUTH_TOKEN must be set in .env or environment}"
+      ALLOWED_ORIGIN: "${ALLOWED_ORIGIN:-https://hbfs-cloud.github.io}"
+      CACHE_DIR: "/cache"
+    volumes:
+      - ./cache:/cache
+    networks:
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "traefik"
+      traefik.http.routers.isbn-proxy.entrypoints: "websecure"
+      traefik.http.routers.isbn-proxy.rule: "Host(`proxy.hbfs-cloud.net`)"
+      traefik.http.routers.isbn-proxy.tls.certresolver: "tlschallenge"
+      traefik.http.services.isbn-proxy.loadbalancer.server.port: "8080"
+networks:
+  traefik:
+    external: true
