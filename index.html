@@ -1226,10 +1226,10 @@
                         <p style="color:var(--text-secondary);" id="batchDoneSummary">Votre ZIP est prêt.</p>
                     </div>
                     <div class="d-flex gap-2 mt-2">
-                        <a id="batchDownloadLink" href="#" download class="btn-primary-grad flex-grow-1 text-center" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.5rem;">
+                        <button id="batchDownloadLink" type="button" class="btn-primary-grad flex-grow-1 text-center" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.5rem;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                             Télécharger le ZIP
-                        </a>
+                        </button>
                         <button id="batchNewBtn" class="btn-ghost-line">Nouveau lot</button>
                     </div>
                 </div>
@@ -1578,6 +1578,95 @@
         clearAuth();
         showAuthGate();
     })();
+
+    // ─── Authenticated fetch helpers (no token in URLs) ───────────────────────────
+    function authHeaders(extra) {
+        const t = getAuthToken();
+        const h = extra ? {...extra} : {};
+        if (t) h['X-Auth'] = t;
+        return h;
+    }
+
+    // Stream an authenticated SSE endpoint via fetch (EventSource can't set
+    // headers, so we parse the event-stream ourselves). Returns a handle with
+    // close() to abort.
+    function openAuthSse(path, handlers) {
+        const ctrl = new AbortController();
+        let closed = false;
+        (async () => {
+            try {
+                const resp = await fetch(API_BASE + path, {
+                    method: 'GET',
+                    headers: authHeaders({Accept: 'text/event-stream'}),
+                    signal: ctrl.signal,
+                    cache: 'no-store',
+                });
+                if (!resp.ok || !resp.body) {
+                    if (handlers.onError) handlers.onError(new Error('HTTP ' + resp.status));
+                    return;
+                }
+                const reader = resp.body.getReader();
+                const dec = new TextDecoder();
+                let buf = '';
+                let evtName = 'message';
+                let dataBuf = '';
+                const dispatch = () => {
+                    if (dataBuf !== '' && handlers.onEvent) handlers.onEvent(evtName, dataBuf);
+                    evtName = 'message';
+                    dataBuf = '';
+                };
+                while (!closed) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    buf += dec.decode(value, {stream: true});
+                    let idx;
+                    while ((idx = buf.indexOf('\n')) !== -1) {
+                        let line = buf.slice(0, idx);
+                        buf = buf.slice(idx + 1);
+                        if (line.endsWith('\r')) line = line.slice(0, -1);
+                        if (line === '') { dispatch(); continue; }
+                        if (line.charCodeAt(0) === 58) continue; // ':' comment/ping
+                        if (line.startsWith('event:')) evtName = line.slice(6).trim();
+                        else if (line.startsWith('data:')) {
+                            const v = line.slice(5);
+                            dataBuf += (v.startsWith(' ') ? v.slice(1) : v);
+                        }
+                    }
+                }
+            } catch (e) {
+                if (!closed && handlers.onError) handlers.onError(e);
+            }
+        })();
+        return {
+            close() {
+                closed = true;
+                try { ctrl.abort(); } catch(e) {}
+            },
+        };
+    }
+
+    // Fetch a ZIP with the auth header, then trigger a local download via a
+    // temporary blob URL. No token ever appears in an HREF or the URL bar.
+    async function downloadAuthZip(path, filename) {
+        const resp = await fetch(API_BASE + path, {
+            method: 'GET',
+            headers: authHeaders(),
+            cache: 'no-store',
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const blob = await resp.blob();
+        const obj = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = obj;
+        a.download = filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            try { URL.revokeObjectURL(obj); } catch(e) {}
+            a.remove();
+        }, 1500);
+    }
 
     // ─── Utilitaires partagés ─────────────────────────────────────────────────────
     function showToast(msg, type = 'error') {
@@ -2038,16 +2127,37 @@
         }).catch(() => {});
     }
 
-    // ── Build download URL for a batch (with optional split) ──────────────────────
-    function zipUrl(jobId, perPart, part, total) {
-        const token = getAuthToken();
-        let url = `${API_BASE}/batch/${jobId}/zip`;
+    // ── Build the ZIP path for a batch (no auth — sent via header at fetch time) ─
+    function zipPath(jobId, perPart, part, total) {
+        let url = `/batch/${jobId}/zip`;
         const params = [];
-        if (token)   params.push('auth=' + encodeURIComponent(token));
         if (perPart) params.push('perPart=' + perPart);
         if (part)    params.push('part=' + part);
         if (params.length) url += '?' + params.join('&');
         return url;
+    }
+
+    function zipFilename(jobId, perPart, part, totalParts) {
+        if (perPart && totalParts > 1) {
+            return `couvertures-${jobId.slice(0,8)}-${part}sur${totalParts}.zip`;
+        }
+        return `couvertures-${jobId.slice(0,8)}.zip`;
+    }
+
+    async function triggerZipDownload(btn, jobId, perPart, part, totalParts) {
+        const origLabel = btn.innerHTML;
+        const path = zipPath(jobId, perPart, part, totalParts);
+        const fname = zipFilename(jobId, perPart, part, totalParts);
+        btn.disabled = true;
+        btn.innerHTML = 'Préparation…';
+        try {
+            await downloadAuthZip(path, fname);
+        } catch (err) {
+            showToast('Téléchargement impossible : ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origLabel;
+        }
     }
 
     // ── Render a single batch row ─────────────────────────────────────────────────
@@ -2059,17 +2169,17 @@
         div.className = 'batch-row';
         div.dataset.batchId = b.id;
 
-        // Build download buttons HTML
+        // Build download buttons HTML (auth goes via header at click time)
         let dlHtml = '';
         if (totalParts <= 1) {
-            dlHtml = `<a href="${zipUrl(b.id,0,0,1)}" download class="btn-action" style="text-decoration:none;">
+            dlHtml = `<button type="button" class="btn-action download-zip-btn" data-job="${b.id}" data-perpart="0" data-part="0" data-total="1" style="text-decoration:none;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Télécharger ZIP</a>`;
+                Télécharger ZIP</button>`;
         } else {
             for (let i = 1; i <= totalParts; i++) {
-                dlHtml += `<a href="${zipUrl(b.id,perPart,i,totalParts)}" download class="btn-action" style="text-decoration:none;">
+                dlHtml += `<button type="button" class="btn-action download-zip-btn" data-job="${b.id}" data-perpart="${perPart}" data-part="${i}" data-total="${totalParts}" style="text-decoration:none;">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Part ${i}/${totalParts}</a>`;
+                    Part ${i}/${totalParts}</button>`;
             }
         }
 
@@ -2118,6 +2228,17 @@
             copyText(b.id, this);
         });
 
+        // ZIP download buttons (auth via X-Auth header at click time)
+        div.querySelectorAll('.download-zip-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const jobId = btn.dataset.job;
+                const perPart = parseInt(btn.dataset.perpart, 10) || 0;
+                const part = parseInt(btn.dataset.part, 10) || 0;
+                const total = parseInt(btn.dataset.total, 10) || 1;
+                triggerZipDownload(btn, jobId, perPart, part, total);
+            });
+        });
+
         // Split toggle (only present when ZIP > 200 MB)
         const splitToggle = div.querySelector('.batch-split-toggle');
         if (splitToggle) {
@@ -2141,11 +2262,10 @@
         // Delete
         div.querySelector('.batch-delete-btn').addEventListener('click', () => {
             showConfirm('Supprimer ce lot ? Cette action est irréversible.', async () => {
-                const token = getAuthToken();
                 try {
                     await fetch(`${API_BASE}/batch/${b.id}/delete`, {
                         method: 'DELETE',
-                        headers: token ? { 'X-Auth': token } : {},
+                        headers: authHeaders(),
                     });
                     div.remove();
                     showToast('Lot supprimé', 'success');
@@ -2277,6 +2397,15 @@
         discardBtn:  document.getElementById('batchDiscardBtn'),
     };
 
+    bEl.downloadLink.addEventListener('click', () => {
+        const jobId = bEl.downloadLink.dataset.job;
+        if (!jobId) return;
+        const perPart = parseInt(bEl.downloadLink.dataset.perpart, 10) || 0;
+        const part = parseInt(bEl.downloadLink.dataset.part, 10) || 0;
+        const total = parseInt(bEl.downloadLink.dataset.total, 10) || 1;
+        triggerZipDownload(bEl.downloadLink, jobId, perPart, part, total);
+    });
+
     function batchShowProgress() {
         bEl.progress.classList.add('visible');
         bEl.done.classList.remove('visible');
@@ -2323,36 +2452,39 @@
         batchShowProgress();
         startElapsedTicker();
         batchUpdateProgress(0, 0, 0, total, 'Connexion…', '');
-        const token = getAuthToken();
-        const url = `${API_BASE}/batch/${jobId}/events${token ? '?auth=' + encodeURIComponent(token) : ''}`;
         if (_batchEs) _batchEs.close();
-        _batchEs = new EventSource(url);
-        _batchEs.addEventListener('progress', e => {
-            try {
-                const d = JSON.parse(e.data);
-                batchUpdateProgress(d.done||0, d.found||0, d.missing||0, d.total||total, d.isbn||'', d.source||'');
-            } catch(err) {}
+        _batchEs = openAuthSse(`/batch/${jobId}/events`, {
+            onEvent: (name, data) => {
+                if (name === 'progress') {
+                    try {
+                        const d = JSON.parse(data);
+                        batchUpdateProgress(d.done||0, d.found||0, d.missing||0, d.total||total, d.isbn||'', d.source||'');
+                    } catch(err) {}
+                } else if (name === 'finished') {
+                    let d = {};
+                    try { d = JSON.parse(data); } catch(err) {}
+                    if (_batchEs) { _batchEs.close(); _batchEs = null; }
+                    clearBatchJob();
+                    const found   = d.found   || 0;
+                    const missing = d.missing || 0;
+                    const tot     = d.total   || total;
+                    const rate    = tot ? Math.round((found / tot) * 100) : 0;
+                    bEl.doneSummary.textContent = `${found}/${tot} couvertures (${rate}\u00a0% de réussite)`;
+                    const perPart = parseInt(document.getElementById('batchPerPart').value) || 0;
+                    savePerPart(jobId, perPart);
+                    const pp = perPart > 0 ? perPart : 0;
+                    const part = perPart > 0 ? 1 : 0;
+                    bEl.downloadLink.dataset.job = jobId;
+                    bEl.downloadLink.dataset.perpart = String(pp);
+                    bEl.downloadLink.dataset.part = String(part);
+                    bEl.downloadLink.dataset.total = '1';
+                    batchShowDone();
+                }
+            },
+            onError: () => {
+                bEl.currentIsbn.textContent = 'Connexion perdue — rafraîchissez pour reconnecter';
+            },
         });
-        _batchEs.addEventListener('finished', e => {
-            _batchEs.close(); _batchEs = null;
-            let d = {};
-            try { d = JSON.parse(e.data); } catch(err) {}
-            clearBatchJob();
-            const found   = d.found   || 0;
-            const missing = d.missing || 0;
-            const tot     = d.total   || total;
-            const rate    = tot ? Math.round((found / tot) * 100) : 0;
-            bEl.doneSummary.textContent = `${found}/${tot} couvertures (${rate}\u00a0% de réussite)`;
-            const perPart = parseInt(document.getElementById('batchPerPart').value) || 0;
-            savePerPart(jobId, perPart);
-            const dl = zipUrl(jobId, perPart && perPart > 0 ? perPart : 0, perPart > 0 ? 1 : 0, 1);
-            bEl.downloadLink.href     = dl;
-            bEl.downloadLink.download = `couvertures-${jobId.slice(0,8)}.zip`;
-            batchShowDone();
-        });
-        _batchEs.onerror = () => {
-            bEl.currentIsbn.textContent = 'Connexion perdue — rafraîchissez pour reconnecter';
-        };
     }
 
     bEl.isbnInput.addEventListener('input', () => {

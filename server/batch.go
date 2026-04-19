@@ -436,12 +436,7 @@ func handleBatchEvents(bm *batchManager, authToken, allowedOrigin string) http.H
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// SSE auth via query string (EventSource can't set headers).
-		token := r.URL.Query().Get("auth")
-		if token == "" {
-			token = r.Header.Get("X-Auth")
-		}
-		if token != authToken {
+		if r.Header.Get("X-Auth") != authToken {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -512,12 +507,7 @@ func handleBatchZip(bm *batchManager, authToken, allowedOrigin string) http.Hand
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// Browsers can't set headers on a download anchor. Allow auth via ?auth= for the ZIP path.
-		token := r.URL.Query().Get("auth")
-		if token == "" {
-			token = r.Header.Get("X-Auth")
-		}
-		if token != authToken {
+		if r.Header.Get("X-Auth") != authToken {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
