@@ -47,6 +47,7 @@ var allSources = map[string]sourceFn{
 	"librairie-al-imam":  islamicBookSiteSource("librairie-al-imam", "https://librairiealimam.fr/recherche?controller=search&s={ISBN}"),
 	"maktaba-abou-imran": islamicBookSiteSource("maktaba-abou-imran", "https://maktaba-abou-imran.com/?s={ISBN}&post_type=product"),
 	"albouraq":           albouraqSource,
+	"jamalon":            jamalonSource,
 	"babelio":            babelioSource,
 }
 
@@ -110,6 +111,7 @@ func tryCover(ctx context.Context, isbn string) ([]byte, string, string) {
 		{"librairie-al-imam", allSources["librairie-al-imam"]},
 		{"maktaba-abou-imran", allSources["maktaba-abou-imran"]},
 		{"albouraq", allSources["albouraq"]},
+		{"jamalon", allSources["jamalon"]},
 		{"babelio", allSources["babelio"]},
 	}
 	if img, mime, src := raceSources(ctx, islamicFR, isbn, meta, 12*time.Second); img != nil {
@@ -329,6 +331,8 @@ func amazonSource(region string) sourceFn {
 
 // ---------- BNF ----------
 var bnfArkRe = regexp.MustCompile(`ark:/12148/[a-zA-Z0-9]+`)
+var bnfDatafieldRe = regexp.MustCompile(`<mxc:datafield[^>]+tag="(\d+)"[^>]*>([\s\S]*?)</mxc:datafield>`)
+var bnfSubfieldRe = regexp.MustCompile(`<mxc:subfield[^>]+code="([^"]+)">([^<]*)</mxc:subfield>`)
 
 func bnfSource(ctx context.Context, isbn string, _ *bookMeta) ([]byte, string, error) {
 	q := fmt.Sprintf(`bib.isbn any "%s"`, isbn)
@@ -356,6 +360,50 @@ func bnfSource(ctx context.Context, isbn string, _ *bookMeta) ([]byte, string, e
 		return img, detectMime(img, mime), nil
 	}
 	return nil, "", fmt.Errorf("bnf no cover")
+}
+
+func extractBNFMeta(xml string) *bookMeta {
+	var title, author string
+	for _, df := range bnfDatafieldRe.FindAllStringSubmatch(xml, -1) {
+		tag, content := df[1], df[2]
+		sub := map[string]string{}
+		for _, sf := range bnfSubfieldRe.FindAllStringSubmatch(content, -1) {
+			sub[sf[1]] = sf[2]
+		}
+		switch tag {
+		case "200":
+			if t := sub["a"]; t != "" && title == "" {
+				title = strings.TrimSpace(t)
+			}
+		case "700", "701":
+			if a := sub["a"]; a != "" && author == "" {
+				if b := sub["b"]; b != "" {
+					author = strings.TrimSpace(b + " " + a)
+				} else {
+					author = strings.TrimSpace(a)
+				}
+			}
+		}
+	}
+	if title == "" {
+		return nil
+	}
+	var authors []string
+	if author != "" {
+		authors = []string{author}
+	}
+	return &bookMeta{Title: title, Authors: authors}
+}
+
+func fetchBNFMetadata(ctx context.Context, isbn string) *bookMeta {
+	q := fmt.Sprintf(`bib.isbn any "%s"`, isbn)
+	api := "http://catalogue.bnf.fr/api/SRU?version=1.2&operation=searchRetrieve&query=" +
+		url.QueryEscape(q) + "&recordSchema=unimarcXchange&maximumRecords=1"
+	body, code, _, err := httpGet(ctx, api, nil)
+	if err != nil || code != 200 || len(body) == 0 {
+		return nil
+	}
+	return extractBNFMeta(string(body))
 }
 
 // ---------- Goodreads ----------
@@ -455,6 +503,7 @@ var prestaProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](https?://[^"']+)[
 var wooProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](https?://[^"']+/(?:produit|product)/[^"']+)["']`)
 var shopifyProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](https?://[^"']+/products/[^"']+)["']`)
 var shopifyRelProductLinkRe = regexp.MustCompile(`<a[^>]+href=["'](/products/[^"']+)["']`)
+var jamalonProductRe = regexp.MustCompile(`href=["'](https://(?:www\.)?jamalon\.com/[a-z]{2}/[^"']+\.html)["']`)
 
 const maxProductCandidates = 8
 
@@ -731,6 +780,60 @@ func albouraqSource(ctx context.Context, isbn string, _ *bookMeta) ([]byte, stri
 	return nil, "", fmt.Errorf("albouraq no cover")
 }
 
+// ---------- Jamalon (Arabic bookstore) ----------
+func jamalonSource(ctx context.Context, isbn string, meta *bookMeta) ([]byte, string, error) {
+	i10, i13 := bothISBNForms(isbn)
+	queries := []string{isbn}
+	for _, alt := range []string{i13, i10} {
+		if alt != "" && alt != isbn {
+			queries = append(queries, alt)
+			break
+		}
+	}
+	if meta != nil && meta.Title != "" {
+		queries = append(queries, sanitizeQuery(meta.Title))
+	}
+
+	for _, q := range queries {
+		searchURL := "https://www.jamalon.com/en/catalogsearch/result/?q=" + url.QueryEscape(q)
+		body, code, _, err := httpGet(ctx, searchURL, map[string]string{
+			"Accept": "text/html,application/xhtml+xml",
+		})
+		if err != nil || code >= 400 {
+			continue
+		}
+		pageStr := string(body)
+		if hasNoResultsMarker(pageStr) {
+			continue
+		}
+		var candidates []string
+		for _, m := range jamalonProductRe.FindAllStringSubmatch(pageStr, 12) {
+			candidates = append(candidates, m[1])
+		}
+		candidates = sortCandidatesByISBN(candidates, isbn, i10, i13)
+		for j, productURL := range candidates {
+			if j >= maxProductCandidates {
+				break
+			}
+			page, c, _, err := httpGet(ctx, productURL, map[string]string{
+				"Referer": searchURL,
+				"Accept":  "text/html",
+			})
+			if err != nil || c >= 400 {
+				continue
+			}
+			pageHTML := string(page)
+			if !pageContainsISBN(pageHTML, isbn, i10, i13) {
+				continue
+			}
+			if img, mime, ok := pickCoverFromHTML(ctx, pageHTML, productURL); ok {
+				return img, mime, nil
+			}
+		}
+	}
+	return nil, "", fmt.Errorf("jamalon no match")
+}
+
 // ---------- Babelio (French book community) ----------
 var babelioBookLinkRe = regexp.MustCompile(`href=["'](/livres/[^"'?#]+)["']`)
 
@@ -1003,5 +1106,7 @@ func fetchMetadata(ctx context.Context, isbn string) *bookMeta {
 		}
 		return &bookMeta{Title: v.Details.Title, Authors: auths}
 	}
-	return nil
+	// Third attempt: BNF SRU (covers all French-published books via legal deposit;
+	// unlocks phase-3 image search for 978-2-xxx titles absent from GB/OL).
+	return fetchBNFMetadata(ctx, isbn)
 }
