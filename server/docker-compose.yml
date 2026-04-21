@@ -6,6 +6,7 @@ services:
     image: isbn-proxy:latest
     container_name: isbn-proxy
     restart: unless-stopped
+    user: "1000:100"
     environment:
       ADDR: ":8080"
       AUTH_TOKEN: "${AUTH_TOKEN:?AUTH_TOKEN must be set in .env or environment}"
