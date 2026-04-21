@@ -47,6 +47,7 @@ var allSources = map[string]sourceFn{
 	"librairie-al-imam":  islamicBookSiteSource("librairie-al-imam", "https://librairiealimam.fr/recherche?controller=search&s={ISBN}"),
 	"maktaba-abou-imran": islamicBookSiteSource("maktaba-abou-imran", "https://maktaba-abou-imran.com/?s={ISBN}&post_type=product"),
 	"albouraq":           albouraqSource,
+	"babelio":            babelioSource,
 }
 
 type source struct {
@@ -109,6 +110,7 @@ func tryCover(ctx context.Context, isbn string) ([]byte, string, string) {
 		{"librairie-al-imam", allSources["librairie-al-imam"]},
 		{"maktaba-abou-imran", allSources["maktaba-abou-imran"]},
 		{"albouraq", allSources["albouraq"]},
+		{"babelio", allSources["babelio"]},
 	}
 	if img, mime, src := raceSources(ctx, islamicFR, isbn, meta, 12*time.Second); img != nil {
 		return img, mime, src
@@ -119,10 +121,15 @@ func tryCover(ctx context.Context, isbn string) ([]byte, string, string) {
 	// no OpenLibrary entry. Meta will always be nil for them, but a raw bing/
 	// yandex/ddg search by the ISBN-13 reliably returns the Amazon cover, so
 	// we let phases 3 and 4 run without meta in that case.
+	// Non-978/979 EAN-13 barcodes (e.g. Belgian 543-prefix) are similarly
+	// absent from ISBN databases — treat them the same way.
 	is979 := strings.HasPrefix(isbn, "979")
-	if hasMeta || is979 {
+	isNonStdEAN := len(isbn) == 13 && !strings.HasPrefix(isbn, "978") && !strings.HasPrefix(isbn, "979")
+	if hasMeta || is979 || isNonStdEAN {
 		if hasMeta {
 			log.Printf("[%s] meta=%q authors=%v → meta-aware scrape", isbn, meta.Title, meta.Authors)
+		} else if isNonStdEAN {
+			log.Printf("[%s] non-standard EAN-13 → raw-ISBN scrape", isbn)
 		} else {
 			log.Printf("[%s] no meta but 979-prefix → raw-ISBN scrape", isbn)
 		}
@@ -152,7 +159,7 @@ func tryCover(ctx context.Context, isbn string) ([]byte, string, string) {
 	// completely unrelated books, so skip them when meta is unavailable
 	// (except for 979 ISBNs, where the Amazon cover is canonical).
 	rawScrape := []source{{"goodreads", goodreadsSource}}
-	if hasMeta || is979 {
+	if hasMeta || is979 || isNonStdEAN {
 		rawScrape = append(rawScrape,
 			source{"bing-images", bingSource(false)},
 			source{"yandex-images", yandexSource(false)},
@@ -649,6 +656,14 @@ func pageContainsISBN(html, isbn, i10, i13 string) bool {
 			return true
 		}
 	}
+	// Many bookstores display ISBNs with hyphens (e.g. "978-2-914578-22-9").
+	// Strip hyphens from the HTML and retry so those pages aren't silently rejected.
+	dehyphenated := strings.ReplaceAll(html, "-", "")
+	for _, k := range []string{isbn, i10, i13} {
+		if k != "" && strings.Contains(dehyphenated, k) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -714,6 +729,62 @@ func albouraqSource(ctx context.Context, isbn string, _ *bookMeta) ([]byte, stri
 		}
 	}
 	return nil, "", fmt.Errorf("albouraq no cover")
+}
+
+// ---------- Babelio (French book community) ----------
+var babelioBookLinkRe = regexp.MustCompile(`href=["'](/livres/[^"'?#]+)["']`)
+
+func babelioSource(ctx context.Context, isbn string, _ *bookMeta) ([]byte, string, error) {
+	i10, i13 := bothISBNForms(isbn)
+	searchURL := "https://www.babelio.com/recherche/?t=isbn&recherche=" + url.QueryEscape(isbn)
+	html, code, _, err := httpGet(ctx, searchURL, map[string]string{
+		"Accept": "text/html,application/xhtml+xml",
+	})
+	if err != nil || code >= 400 {
+		return nil, "", fmt.Errorf("babelio search code=%d err=%v", code, err)
+	}
+	body := string(html)
+
+	// babelio may redirect directly to a book page — check og:image first.
+	if pageContainsISBN(body, isbn, i10, i13) {
+		if m := ogImageRe.FindStringSubmatch(body); len(m) > 1 {
+			imgURL := strings.ReplaceAll(m[1], "&amp;", "&")
+			if !strings.Contains(strings.ToLower(imgURL), "nophoto") {
+				img, c, mime, e := httpGet(ctx, imgURL, map[string]string{"Referer": "https://www.babelio.com/"})
+				if e == nil && c == 200 && looksLikeImage(img, mime) && looksLikeBookCover(img, imgURL) {
+					return img, detectMime(img, mime), nil
+				}
+			}
+		}
+	}
+
+	// Otherwise follow the first /livres/... link in search results.
+	m := babelioBookLinkRe.FindStringSubmatch(body)
+	if len(m) < 2 {
+		return nil, "", fmt.Errorf("babelio no book link")
+	}
+	bookURL := "https://www.babelio.com" + m[1]
+	page, c, _, err := httpGet(ctx, bookURL, map[string]string{
+		"Referer": searchURL,
+		"Accept":  "text/html",
+	})
+	if err != nil || c >= 400 {
+		return nil, "", fmt.Errorf("babelio book page code=%d", c)
+	}
+	pageStr := string(page)
+	if !pageContainsISBN(pageStr, isbn, i10, i13) {
+		return nil, "", fmt.Errorf("babelio isbn mismatch")
+	}
+	if om := ogImageRe.FindStringSubmatch(pageStr); len(om) > 1 {
+		imgURL := strings.ReplaceAll(om[1], "&amp;", "&")
+		if !strings.Contains(strings.ToLower(imgURL), "nophoto") {
+			img, c2, mime, e := httpGet(ctx, imgURL, map[string]string{"Referer": "https://www.babelio.com/"})
+			if e == nil && c2 == 200 && looksLikeImage(img, mime) && looksLikeBookCover(img, imgURL) {
+				return img, detectMime(img, mime), nil
+			}
+		}
+	}
+	return nil, "", fmt.Errorf("babelio no cover")
 }
 
 func pickCoverFromHTML(ctx context.Context, html, referer string) ([]byte, string, bool) {
